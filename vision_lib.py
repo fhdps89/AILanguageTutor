@@ -40,7 +40,7 @@ VISION_SCHEMA = {
                     "liaison_hint": {"type": "string"},
                     "vocabulary": {
                         "type": "array",
-                        "minItems": 1,
+                        "minItems": 0,
                         "items": {
                             "type": "object",
                             "required": ["word", "meaning"],
@@ -58,30 +58,15 @@ VISION_SCHEMA = {
 }
 
 SYSTEM_PROMPT = """You are an OCR + French-learning annotator for Korean beginners who cannot read French.
-Return ONLY a valid JSON object. No markdown fences, no commentary before or after.
-Preserve spelling, accents, quotes, and case from the photo. Repair hyphen line-breaks.
-Put spoken expansions of numbers/ordinals ONLY in tts_text and full_tts_script.
-
-RULE 1 TITLE IS MANDATORY (s00):
-The book or page title MUST be the first sentence with id s00.
-Body sentences follow as s01, s02, ...
-
-RULE 2 SYNTAX DIAGRAM:
-ASCII chunk tree. Root: Subject | Verb (short Korean).
-Branches (+--): modifier chunks with short Korean.
-
-RULE 3 VOCABULARY:
-Every sentence MUST contain 3 to 6 vocabulary items.
-{word, meaning, hint} with Hangul approx in hint. Do not call Hangul exact.
-translation is Korean. Separate the text claim from historical assertion.
+Return ONLY a valid JSON object. No markdown fences.
+Preserve spelling and accents. Put spoken number expansions ONLY in tts_text and full_tts_script.
+RULE 1: first sentence id must be s00 (page title). Body s01, s02, ...
+RULE 2: syntax_diagram ASCII chunks with Korean glosses.
+RULE 3: every sentence vocabulary MUST have 3 to 6 items {word, meaning, hint}. Never return an empty vocabulary array.
+translation is Korean.
 """
 
-DEFAULT_VISION_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-]
+DEFAULT_VISION_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
 
 
 def secret(name: str, default: str = "") -> str:
@@ -92,6 +77,27 @@ def secret(name: str, default: str = "") -> str:
     except Exception:
         pass
     return os.environ.get(name, default)
+
+
+def _clean_vocab(raw_vocab, fallback_text: str) -> list:
+    items = raw_vocab if isinstance(raw_vocab, list) else []
+    cleaned = []
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            cleaned.append({"word": item.strip(), "meaning": "", "hint": ""})
+        elif isinstance(item, dict):
+            word = str(item.get("word") or "").strip()
+            if not word:
+                continue
+            cleaned.append({
+                "word": word,
+                "meaning": str(item.get("meaning") or "").strip(),
+                "hint": str(item.get("hint") or "").strip(),
+            })
+    if cleaned:
+        return cleaned
+    token = (fallback_text or "item").split()[0][:40]
+    return [{"word": token, "meaning": "core phrase", "hint": ""}]
 
 
 def vision_model_list() -> list[str]:
@@ -163,7 +169,7 @@ def normalize_page(data: dict) -> dict:
             "breath_marks": str(sent.get("breath_marks") or raw_s).strip(),
             "syntax_diagram": str(sent.get("syntax_diagram") or raw_s).strip(),
             "liaison_hint": str(sent.get("liaison_hint") or "").strip(),
-            "vocabulary": sent.get("vocabulary") if isinstance(sent.get("vocabulary"), list) else [],
+            "vocabulary": _clean_vocab(sent.get("vocabulary"), raw_s),
         })
     if not cleaned:
         raise ValueError("empty sentences")
@@ -182,7 +188,7 @@ def normalize_page(data: dict) -> dict:
             "breath_marks": title,
             "syntax_diagram": f"{title} (title)",
             "liaison_hint": "",
-            "vocabulary": [{"word": title, "meaning": "page title", "hint": ""}],
+            "vocabulary": _clean_vocab([], title),
         })
     full = data.get("full_tts_script") or " ".join(s["tts_text"] for s in cleaned)
     return {
@@ -275,8 +281,7 @@ def call_openrouter_vision(image_bytes: bytes) -> dict:
         default_headers={"HTTP-Referer": "https://github.com/fhdps89/AILanguageTutor", "X-Title": "AILanguageTutor"},
     )
     resp = client.chat.completions.create(
-        model=model,
-        temperature=0,
+        model=model, temperature=0,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": [
@@ -297,8 +302,7 @@ def call_xai_vision(image_bytes: bytes) -> dict:
     b64 = base64.b64encode(image_bytes).decode("ascii")
     client = OpenAI(api_key=key, base_url="https://api.x.ai/v1")
     resp = client.chat.completions.create(
-        model=model,
-        temperature=0,
+        model=model, temperature=0,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": [
