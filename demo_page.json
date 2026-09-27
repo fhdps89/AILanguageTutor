@@ -1,0 +1,125 @@
+{
+  "title": "L’ARC DE TRIOMPHE",
+  "full_tts_script": "L’Arc de Triomphe. Il trône sur la place de l’Étoile, au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline : l’Arc de triomphe est le plus grand monument de ce genre au monde. Comme ceux érigés par les empereurs romains, il fut avant tout construit pour célébrer les armées victorieuses. C’est Napoléon Premier, au lendemain de la bataille d’Austerlitz le deux décembre mil huit cent cinq, qui avait déclaré à ses soldats : Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe. Mais cette bataille triomphale est suivie de défaites, et l’exil de l’empereur en mil huit cent quatorze à l’île d’Elbe, puis sa mort en mil huit cent vingt et un, compliquent durablement les travaux. Il fallut finalement trente ans pour que l’arc soit inauguré en mil huit cent trente-six. Hauts et bas-reliefs célèbrent la nation rassemblée, comme dans le Départ des Volontaires de mil sept cent quatre-vingt-douze de François Rude, mieux connu sous le nom de La Marseillaise. Et de fait, c’est aussi ce rôle que joue l’Arc de triomphe, un catalyseur des espérances et des grandes heures de la Patrie.",
+  "disclaimer_ko": "음성은 합성 TTS이며 원어민이 아닙니다. 한글 표기는 힌트([~])일 뿐입니다.",
+  "sentences": [
+    {
+      "id": "s00",
+      "raw_text": "L’ARC DE TRIOMPHE",
+      "tts_text": "L’Arc de Triomphe",
+      "translation": "개선문 (제목)",
+      "breath_marks": "L’ARC DE TRIOMPHE",
+      "syntax_diagram": "[제목] L’ARC DE TRIOMPHE",
+      "liaison_hint": "L’‿Arc",
+      "vocabulary": [
+        {"word": "Arc de triomphe", "meaning": "개선문 (고유 건축물 이름)", "hint": "[~ 아르크 드 트리옹프]"}
+      ]
+    },
+    {
+      "id": "s01",
+      "raw_text": "Il trône sur la place de l’Étoile, au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline :",
+      "tts_text": "Il trône sur la place de l’Étoile, au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline.",
+      "translation": "그것은 에투알 광장 위, 언덕 꼭대기의 다이아몬드처럼 열두 갈래 거리가 감싸는 중심에 자리한다:",
+      "breath_marks": "Il trône sur la place de l’Étoile, / au centre de douze avenues / qui le sertissent comme un diamant au sommet d’une colline :",
+      "syntax_diagram": "Il trône [장소] sur la place de l’Étoile\n        [부가] au centre de douze avenues\n               qui le sertissent comme un diamant…",
+      "liaison_hint": "l’‿Étoile · douze‿avenues",
+      "vocabulary": [
+        {"word": "trôner", "meaning": "군림하다/우뚝하다 — 주어 Il의 동사", "hint": "[~ 트론]"},
+        {"word": "place de l’Étoile", "meaning": "에투알 광장(현 드골 광장)", "hint": "[~ 플라스 드 레트왈]"},
+        {"word": "sertir", "meaning": "보석을 물리듯 감싸다", "hint": "[~ 세르티르]"}
+      ]
+    },
+    {
+      "id": "s02",
+      "raw_text": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
+      "tts_text": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
+      "translation": "개선문은 이 종류의 기념물 가운데 세계에서 가장 크다고 이 글은 말한다. (글의 수사. 독립 사실로 단정하지 말 것)",
+      "breath_marks": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
+      "syntax_diagram": "l’Arc de triomphe  est  le plus grand monument\n                         de ce genre  au monde",
+      "liaison_hint": "l’‿Arc · grand‿monument",
+      "vocabulary": [
+        {"word": "le plus grand", "meaning": "최상급 ‘가장 큰’ — 글의 주장", "hint": "[~ 르 플뤼 그랑]"},
+        {"word": "de ce genre", "meaning": "이 종류의", "hint": ""}
+      ]
+    },
+    {
+      "id": "s03",
+      "raw_text": "Comme ceux érigés par les empereurs romains, il fut avant tout construit pour célébrer les armées victorieuses.",
+      "tts_text": "Comme ceux érigés par les empereurs romains, il fut avant tout construit pour célébrer les armées victorieuses.",
+      "translation": "로마 황제들이 세운 것들처럼, 무엇보다 승리한 군대를 기리려고 지어졌다.",
+      "breath_marks": "Comme ceux érigés par les empereurs romains, / il fut avant tout construit / pour célébrer les armées victorieuses.",
+      "syntax_diagram": "Comme ceux érigés par les empereurs romains,\nil  fut construit  pour célébrer  les armées victorieuses\n   (être 단순과거 + 과거분사 = 수동)",
+      "liaison_hint": "les‿empereurs · armées‿victorieuses",
+      "vocabulary": [
+        {"word": "érigés", "meaning": "세워진 — 과거분사, ceux와 성수 일치", "hint": "[~ 에리제]"},
+        {"word": "il fut construit", "meaning": "그것이 건설되었다 (수동)", "hint": ""}
+      ]
+    },
+    {
+      "id": "s04",
+      "raw_text": "C’est Napoléon Ier, au lendemain de la bataille d’Austerlitz le 2 décembre 1805, qui avait déclaré à ses soldats : « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe ».",
+      "tts_text": "C’est Napoléon Premier, au lendemain de la bataille d’Austerlitz le deux décembre mil huit cent cinq, qui avait déclaré à ses soldats : Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe.",
+      "translation": "아우스터리츠 전투 다음날인 1805년 12월 2일, 나폴레옹 1세가 병사들에게 이렇게 말했다고 글은 전한다. 「너희는 개선문 아래로만 집으로 돌아가리라.」",
+      "breath_marks": "C’est Napoléon Ier, / au lendemain de la bataille d’Austerlitz le 2 décembre 1805, / qui avait déclaré à ses soldats : / « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe ».",
+      "syntax_diagram": "C’est [Napoléon Ier] qui avait déclaré …\n인용: ne … que = 오직 ~만\nVous ne rentrerez … que sous des arcs de Triomphe",
+      "liaison_hint": "C’est · dans‿vos",
+      "vocabulary": [
+        {"word": "C’est A qui", "meaning": "강조 구문 ‘바로 A가’", "hint": ""},
+        {"word": "ne … que", "meaning": "오직 ~만", "hint": ""},
+        {"word": "foyers", "meaning": "가정/고향 집", "hint": "[~ 프와예]"}
+      ]
+    },
+    {
+      "id": "s05",
+      "raw_text": "Mais cette bataille triomphale est suivie de défaites, et l’exil de l’empereur en 1814 à l’île d’Elbe, puis sa mort en 1821, compliquent durablement les travaux.",
+      "tts_text": "Mais cette bataille triomphale est suivie de défaites, et l’exil de l’empereur en mil huit cent quatorze à l’île d’Elbe, puis sa mort en mil huit cent vingt et un, compliquent durablement les travaux.",
+      "translation": "그러나 그 개선의 전투 뒤에 패배가 이어지고, 1814년 엘바 유배와 1821년 황제의 죽음이 공사를 오래 꼬이게 한다.",
+      "breath_marks": "Mais cette bataille triomphale est suivie de défaites, / et l’exil de l’empereur en 1814 à l’île d’Elbe, / puis sa mort en 1821, / compliquent durablement les travaux.",
+      "syntax_diagram": "[l’exil … puis sa mort]  →  compliquent  les travaux\n(복수 주어 묶음 + 복수 동사)",
+      "liaison_hint": "est‿suivie",
+      "vocabulary": [
+        {"word": "est suivie de", "meaning": "~가 뒤를 잇다", "hint": ""},
+        {"word": "compliquent", "meaning": "복잡하게 만들다 — 주어는 유배+죽음", "hint": ""}
+      ]
+    },
+    {
+      "id": "s06",
+      "raw_text": "Il fallut finalement trente ans pour que l’arc soit inauguré en 1836.",
+      "tts_text": "Il fallut finalement trente ans pour que l’arc soit inauguré en mil huit cent trente-six.",
+      "translation": "결국 아치가 1836년에 개관되기까지 30년이 걸렸다.",
+      "breath_marks": "Il fallut finalement trente ans / pour que l’arc soit inauguré en 1836.",
+      "syntax_diagram": "Il fallut  trente ans   (비인칭 단순과거)\npour que l’arc  soit inauguré   (접속법)",
+      "liaison_hint": "soit‿inauguré",
+      "vocabulary": [
+        {"word": "Il fallut", "meaning": "필요했다/~가 걸렸다 (비인칭)", "hint": "[~ 일 팔뤼]"},
+        {"word": "pour que + 접속법", "meaning": "~하기 위하여", "hint": ""}
+      ]
+    },
+    {
+      "id": "s07",
+      "raw_text": "Hauts et bas-reliefs célèbrent la nation rassemblée, comme dans le Départ des Volontaires de 1792 de François Rude, mieux connu sous le nom de La Marseillaise.",
+      "tts_text": "Hauts et bas-reliefs célèbrent la nation rassemblée, comme dans le Départ des Volontaires de mil sept cent quatre-vingt-douze de François Rude, mieux connu sous le nom de La Marseillaise.",
+      "translation": "고부조와 저부조는 모인 국민을 기린다. 프랑수아 뤼드의 1792년 《의용군의 출발》, 별칭 《라 마르세예즈》에서처럼.",
+      "breath_marks": "Hauts et bas-reliefs célèbrent la nation rassemblée, / comme dans le Départ des Volontaires de 1792 de François Rude, / mieux connu sous le nom de La Marseillaise.",
+      "syntax_diagram": "Hauts et bas-reliefs  célèbrent  la nation rassemblée\ncomme dans [조각 제목] Départ des Volontaires de 1792\n            작가 François Rude / 별칭 La Marseillaise",
+      "liaison_hint": "Hauts‿et",
+      "vocabulary": [
+        {"word": "bas-reliefs", "meaning": "저부조", "hint": "[~ 바 를리에프]"},
+        {"word": "La Marseillaise", "meaning": "뤼드 조각의 통칭 (국가와 동명)", "hint": ""}
+      ]
+    },
+    {
+      "id": "s08",
+      "raw_text": "Et de fait, c’est aussi ce rôle que joue l’Arc de triomphe, un catalyseur des espérances et des grandes heures de la Patrie.",
+      "tts_text": "Et de fait, c’est aussi ce rôle que joue l’Arc de triomphe, un catalyseur des espérances et des grandes heures de la Patrie.",
+      "translation": "실제로 개선문이 하는 역할도 바로 그것이다. 조국의 바람과 큰 순간을 모으는 촉매.",
+      "breath_marks": "Et de fait, / c’est aussi ce rôle que joue l’Arc de triomphe, / un catalyseur des espérances et des grandes heures de la Patrie.",
+      "syntax_diagram": "c’est  ce rôle  que  joue  l’Arc\n(jouer un rôle 가 도치됨)\nla Patrie = 조국 (대문자)",
+      "liaison_hint": "c’est‿aussi",
+      "vocabulary": [
+        {"word": "jouer un rôle", "meaning": "역할을 하다 — 여기서 도치", "hint": ""},
+        {"word": "la Patrie", "meaning": "조국 (고유명처럼 대문자)", "hint": "[~ 라 파트리]"}
+      ]
+    }
+  ]
+}
