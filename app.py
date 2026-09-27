@@ -16,7 +16,7 @@ from audio_lib import (
     synthesize_page,
 )
 
-BUILD = "20260927-vocab2"
+BUILD = "20260927-lib1"
 
 
 def main() -> None:
@@ -26,7 +26,7 @@ def main() -> None:
     st.write("책·안내판 사진 한 장 → 문장마다 듣고 따라 읽기. 문법 강의기가 아닙니다.")
 
     if not ffmpeg_ok():
-        st.error("ffmpeg가 설치되어 있지 않습니다. 설치 후 다시 실행하세요.")
+        st.error("ffmpeg가 설치되어 있지 않습니다.")
         st.stop()
 
     if secret("OPENROUTER_API_KEY") and secret("VISION_PROVIDER", "openrouter") != "gemini":
@@ -49,44 +49,18 @@ def main() -> None:
         st.session_state.cache_key = None
 
     if st.session_state.page is None:
-        lib = load_library()
-        last_key = lib[0]["key"] if lib else None
+        lib0 = load_library()
+        last_key = lib0[0]["key"] if lib0 else None
         if last_key:
             data, paths, photo = load_persisted_lesson(last_key)
             if data:
                 if not audio_ready(data, paths):
                     paths = synthesize_page(data, last_key)
-                    persist_lesson(last_key, data, photo, lib[0].get("source", "photo"))
+                    persist_lesson(last_key, data, photo, lib0[0].get("source", "photo"))
                 st.session_state.page = data
                 st.session_state.paths = paths
                 st.session_state.photo = photo
                 st.session_state.cache_key = last_key
-
-    lib = load_library()
-    if lib:
-        st.sidebar.markdown("**저장된 페이지**")
-        labels = [f"{x.get('title','(제목 없음)')} · {x['key'][:8]}" for x in lib]
-        pick = st.sidebar.selectbox(
-            "이전 분석 불러오기",
-            options=range(len(lib)),
-            format_func=lambda i: labels[i],
-            index=0,
-        )
-        if st.sidebar.button("선택한 페이지 열기"):
-            key = lib[pick]["key"]
-            data, paths, photo = load_persisted_lesson(key)
-            if not data:
-                st.sidebar.error("이 항목의 page.json이 없습니다.")
-            else:
-                if not audio_ready(data, paths):
-                    with st.spinner("음성만 다시 만듭니다..."):
-                        paths = synthesize_page(data, key)
-                persist_lesson(key, data, photo, lib[pick].get("source", "photo"))
-                st.session_state.page = data
-                st.session_state.paths = paths
-                st.session_state.photo = photo
-                st.session_state.cache_key = key
-                st.session_state.last_hash = None
 
     col1, col2 = st.columns(2)
     run_demo = col1.button("데모 페이지 만들기", disabled=not demo and uploaded is None)
@@ -136,6 +110,30 @@ def main() -> None:
             except Exception as exc:
                 st.exception(exc)
                 st.stop()
+
+    lib = load_library()
+    st.sidebar.markdown("**저장된 페이지**")
+    if not lib:
+        st.sidebar.caption("아직 저장된 분석이 없습니다. 사진 분석 후 여기에 나옵니다.")
+    else:
+        labels = [f"{x.get('title','(제목 없음)')} · {x.get('n_sentences', '?')}s" for x in lib]
+        pick = st.sidebar.selectbox("이전 분석 불러오기", options=range(len(lib)), format_func=lambda i: labels[i], index=0)
+        if st.sidebar.button("선택한 페이지 열기"):
+            key = lib[pick]["key"]
+            data, paths, photo = load_persisted_lesson(key)
+            if not data:
+                st.sidebar.error("page.json이 없습니다.")
+            else:
+                if not audio_ready(data, paths):
+                    with st.spinner("음성만 다시 만듭니다..."):
+                        paths = synthesize_page(data, key)
+                persist_lesson(key, data, photo, lib[pick].get("source", "photo"))
+                st.session_state.page = data
+                st.session_state.paths = paths
+                st.session_state.photo = photo
+                st.session_state.cache_key = key
+                st.session_state.last_hash = None
+                st.rerun()
 
     if st.session_state.page and st.session_state.paths:
         key = st.session_state.get("cache_key")
