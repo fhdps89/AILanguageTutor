@@ -16,7 +16,7 @@ from audio_lib import (
     synthesize_page,
 )
 
-BUILD = "20260927-lib1"
+BUILD = "20260927-libname"
 
 
 def main() -> None:
@@ -114,9 +114,9 @@ def main() -> None:
     lib = load_library()
     st.sidebar.markdown("**저장된 페이지**")
     if not lib:
-        st.sidebar.caption("아직 저장된 분석이 없습니다. 사진 분석 후 여기에 나옵니다.")
+        st.sidebar.caption("아직 저장된 분석이 없습니다.")
     else:
-        labels = [f"{x.get('title','(제목 없음)')} · {x.get('n_sentences', '?')}s" for x in lib]
+        labels = [x.get("title") or x.get("key") for x in lib]
         pick = st.sidebar.selectbox("이전 분석 불러오기", options=range(len(lib)), format_func=lambda i: labels[i], index=0)
         if st.sidebar.button("선택한 페이지 열기"):
             key = lib[pick]["key"]
