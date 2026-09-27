@@ -1,0 +1,5 @@
+streamlit>=1.32
+edge-tts>=6.1
+openai>=1.40
+pillow>=10.0
+jsonschema>=4.20
