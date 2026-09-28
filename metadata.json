@@ -1,0 +1,8 @@
+{
+  "name": "프랑스어 쉐도잉 튜터 (AI Language Tutor)",
+  "description": "책·안내판 사진 한 장으로 문장마다 듣고 따라 읽는 프랑스어 쉐도잉 학습 튜터",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
