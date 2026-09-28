@@ -77,29 +77,39 @@
 
 ---
 
-## 🚀 로컬 개발 및 실행
+## 🌐 라이브 서비스 및 배포 환경
 
-### 1. 패키지 설치
+### 1. 공식 운영 서비스 (Production)
+- **라이브 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
+- **인프라:** Google AI Studio Applet (Google Cloud Run 기반 컨테이너 런타임)
+- **배포 방식:** AI Studio UI에서 **[Publish(게시)]** 버튼을 클릭하면 자동으로 프로덕션 빌드(`npm run build`)가 수행된 후, 글로벌 HTTPS 및 Google 고성능 CDN을 통해 전 세계 사용자에게 무중단 배포됩니다.
+- **인증 및 자격 증명:** 별도의 `.env` 설정 없이도 Google AI Studio 내부 인증 시스템을 통해 Gemini 3.8 Flash Vision 및 Native Speech TTS API가 안전하게 자동 주입됩니다.
+
+### 2. AI Studio 개발 환경 (Development Runtime)
+- AI Studio 작업 영역의 클라우드 컨테이너에서 `npm run dev` (`tsx server.ts`)가 백그라운드로 실행됩니다.
+- Node.js Express 백엔드 위에 Vite 프론트엔드 미들웨어가 통합 마운트되어 내부 3000번 포트에서 구동되며, 개발자 전용 프리뷰 URL(`https://ais-dev-...`)을 통해 실시간으로 변경 사항이 반영됩니다.
+
+### 3. 로컬 독립 개발 환경 (선택 사항)
+코드를 로컬 컴퓨터로 내려받아 독립 실행할 경우:
 ```bash
+# 의존성 설치
 npm install
-```
 
-### 2. 개발 서버 실행
-```bash
+# 로컬 개발 서버 실행 (포트 3000)
 npm run dev
-```
-Express 백엔드와 Vite 프론트엔드가 통합되어 `http://localhost:3000`에서 실행됩니다.
 
-### 3. 프로덕션 빌드
-```bash
+# 프로덕션 빌드 검증
 npm run build
 ```
 
 ---
 
-## 🔑 환경 변수 (.env)
+## 🔑 환경 변수 설정 안내
 
-`.env` 파일에 필요한 API 키를 설정합니다. (AI Studio 환경에서는 Google 서비스 계정 및 API 키가 자동으로 주입됩니다.)
+- **AI Studio 클라우드 서비스 환경:**
+  - AI Studio 플랫폼에서 Google Gemini API 및 런타임 환경이 자동으로 연결되므로 **사용자가 환경 변수를 수동으로 입력할 필요가 없습니다.**
+- **외부/로컬 환경 실행 시 (`.env`):**
+  - 로컬 컴퓨터나 별도 호스팅 환경에서 실행할 경우 아래와 같이 `.env` 파일에 API 키를 설정합니다.
 
 ```env
 # Google Gemini API (Vision OCR 및 Native TTS 필수)
