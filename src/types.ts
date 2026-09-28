@@ -64,3 +64,11 @@ export interface SystemStatus {
   hasXAI: boolean;
   availableProviders: ProviderOption[];
 }
+
+export interface StudyBookmark {
+  lessonKey: string;
+  lessonTitle: string;
+  sentenceId: string;
+  sentenceText: string;
+  updatedAt: string;
+}

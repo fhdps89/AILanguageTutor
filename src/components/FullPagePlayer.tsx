@@ -21,8 +21,9 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
   pageData,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
 
-  const langCode = language?.code || 'en-US';
+  const langParam = language?.name_en || language?.code || 'en-US';
 
   const handlePlayToggle = () => {
     if (isPlaying) {
@@ -34,12 +35,29 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
     playSentenceAudio({
       audioUrl: audioUrl || null,
       text: fullScript || title,
-      lang: langCode,
-      rate: 1.0,
+      lang: langParam,
+      rate: playbackSpeed,
       onStart: () => setIsPlaying(true),
       onEnd: () => setIsPlaying(false),
       onError: () => setIsPlaying(false),
     });
+  };
+
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+    if (isPlaying) {
+      stopAllAudio();
+      setIsPlaying(false);
+      playSentenceAudio({
+        audioUrl: audioUrl || null,
+        text: fullScript || title,
+        lang: langParam,
+        rate: speed,
+        onStart: () => setIsPlaying(true),
+        onEnd: () => setIsPlaying(false),
+        onError: () => setIsPlaying(false),
+      });
+    }
   };
 
   const handleDownloadJson = () => {
@@ -59,7 +77,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-              전체 지문 연속 듣기 (1.0x)
+              전체 지문 연속 듣기 ({playbackSpeed}x)
             </span>
             {language && (
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
@@ -71,26 +89,46 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
           <h2 className="text-lg font-bold text-slate-900 mt-0.5">{title}</h2>
         </div>
 
-        <button
-          onClick={handlePlayToggle}
-          className={`flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold shadow-xs transition ${
-            isPlaying
-              ? 'bg-amber-600 text-white hover:bg-amber-700'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700'
-          }`}
-        >
-          {isPlaying ? (
-            <>
-              <Pause className="h-4 w-4" />
-              일시정지
-            </>
-          ) : (
-            <>
-              <Volume2 className="h-4 w-4" />
-              전체 본문 연속 듣기
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Speed Pills */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+            {[1.0, 0.75, 0.5].map((speed) => (
+              <button
+                key={speed}
+                type="button"
+                onClick={() => handleSpeedChange(speed)}
+                className={`px-2 py-1 rounded-md font-semibold transition cursor-pointer ${
+                  playbackSpeed === speed
+                    ? 'bg-white text-indigo-600 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {speed}x
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handlePlayToggle}
+            className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-xs transition cursor-pointer ${
+              isPlaying
+                ? 'bg-amber-600 text-white hover:bg-amber-700'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+          >
+            {isPlaying ? (
+              <>
+                <Pause className="h-4 w-4" />
+                일시정지
+              </>
+            ) : (
+              <>
+                <Volume2 className="h-4 w-4" />
+                연속 듣기
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Full Script Text */}

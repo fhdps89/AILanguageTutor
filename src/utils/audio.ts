@@ -24,7 +24,7 @@ export function stopAllAudio() {
 }
 
 /**
- * Play an MP3 url or fallback to Web Speech API in the target language
+ * Play native Gemini TTS audio (/api/tts) or fallback to Web Speech API
  */
 export async function playSentenceAudio({
   audioUrl,
@@ -45,33 +45,52 @@ export async function playSentenceAudio({
 }) {
   stopAllAudio();
 
-  // Try playing pre-rendered MP3 if provided
-  if (audioUrl) {
-    try {
-      const audio = new Audio(audioUrl);
-      audio.playbackRate = rate;
-      activeAudio = audio;
-
-      audio.onplay = () => onStart?.();
-      audio.onended = () => {
-        activeAudio = null;
-        onEnd?.();
-      };
-      audio.onerror = (e) => {
-        console.warn('MP3 playback failed, falling back to Web Speech API', e);
-        activeAudio = null;
-        speakWebSpeech(text, rate, lang, onStart, onEnd, onError);
-      };
-
-      await audio.play();
-      return;
-    } catch (err) {
-      console.warn('Audio play error, falling back to Web Speech', err);
-    }
+  const cleanText = (text || '').trim();
+  if (!cleanText) {
+    onEnd?.();
+    return;
   }
 
-  // Fallback to Web Speech API
-  speakWebSpeech(text, rate, lang, onStart, onEnd, onError);
+  // Construct target audio URL:
+  // When rate is 0.75 or 0.5, request Gemini TTS to speak at that exact pace natively
+  // without browser DSP time-stretching (eliminates crackling / "지지직" robotic noise).
+  const speedParam = rate === 1.0 ? '1.0' : String(rate);
+  let targetAudioUrl: string;
+
+  if (audioUrl && audioUrl.includes('/api/tts')) {
+    const base = audioUrl.replace(/([?&])(speed|rate)=[^&]*/g, '$1').replace(/[?&]$/, '');
+    const cleanSep = base.includes('?') ? '&' : '?';
+    targetAudioUrl = `${base}${cleanSep}speed=${speedParam}`;
+  } else if (!audioUrl || rate !== 1.0) {
+    targetAudioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}&speed=${speedParam}`;
+  } else {
+    targetAudioUrl = audioUrl;
+  }
+
+  try {
+    const audio = new Audio(targetAudioUrl);
+    // Since Gemini TTS itself articulates naturally at the target speed,
+    // playbackRate stays 1.0 to preserve pristine acoustic quality without distortion.
+    audio.playbackRate = 1.0;
+    activeAudio = audio;
+
+    audio.onplay = () => onStart?.();
+    audio.onended = () => {
+      activeAudio = null;
+      onEnd?.();
+    };
+    audio.onerror = (e) => {
+      console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
+      activeAudio = null;
+      speakWebSpeech(cleanText, rate, lang, onStart, onEnd, onError);
+    };
+
+    await audio.play();
+    return;
+  } catch (err) {
+    console.warn('Audio play error, falling back to Web Speech', err);
+    speakWebSpeech(cleanText, rate, lang, onStart, onEnd, onError);
+  }
 }
 
 function speakWebSpeech(
@@ -125,13 +144,14 @@ function speakWebSpeech(
 }
 
 /**
- * Play 0.75x practice track (slow -> pause to repeat -> slow)
+ * Play practice track (slow -> pause to repeat -> slow) with configurable rate (0.5x, 0.75x)
+ * Uses native Gemini TTS slow speech generation to eliminate mechanical distortion
  */
 export async function playPracticeTrack({
-  practiceAudioUrl,
   rawAudioUrl,
   text,
   lang = 'en-US',
+  rate = 0.75,
   onPhaseChange,
   onEnd,
 }: {
@@ -139,47 +159,23 @@ export async function playPracticeTrack({
   rawAudioUrl?: string | null;
   text: string;
   lang?: string;
+  rate?: number;
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void;
   onEnd?: () => void;
 }) {
   stopAllAudio();
-
-  // If a pre-generated practice MP3 exists on server
-  if (practiceAudioUrl) {
-    try {
-      const audio = new Audio(practiceAudioUrl);
-      activeAudio = audio;
-      onPhaseChange?.('playing1');
-
-      audio.onended = () => {
-        activeAudio = null;
-        onPhaseChange?.('idle');
-        onEnd?.();
-      };
-      audio.onerror = () => {
-        // Fallback to client-side practice loop
-        activeAudio = null;
-        runClientPracticeLoop(rawAudioUrl, text, lang, onPhaseChange, onEnd);
-      };
-
-      await audio.play();
-      return;
-    } catch {
-      // Fallback
-    }
-  }
-
-  runClientPracticeLoop(rawAudioUrl, text, lang, onPhaseChange, onEnd);
+  runClientPracticeLoop(rawAudioUrl, text, lang, rate, onPhaseChange, onEnd);
 }
 
 function runClientPracticeLoop(
   rawAudioUrl: string | null | undefined,
   text: string,
   lang: string = 'en-US',
+  rate: number = 0.75,
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void,
   onEnd?: () => void
 ) {
-  // Step 1: play 0.75x
+  // Step 1: play at specified practice rate (0.5x or 0.75x)
   onPhaseChange?.('playing1');
   const startTime = Date.now();
 
@@ -187,22 +183,23 @@ function runClientPracticeLoop(
     audioUrl: rawAudioUrl,
     text,
     lang,
-    rate: 0.75,
+    rate,
     onEnd: () => {
       const duration = (Date.now() - startTime) / 1000;
-      const pauseDuration = Math.max(2000, duration * 1200);
+      // Generous pause duration for shadowing: minimum 2.5s or 1.25x the spoken duration
+      const pauseDuration = Math.max(2500, duration * 1250);
 
       // Step 2: pause for student shadowing
       onPhaseChange?.('pause');
 
       practiceTimer = setTimeout(() => {
-        // Step 3: repeat 0.75x
+        // Step 3: repeat at practice rate
         onPhaseChange?.('playing2');
         playSentenceAudio({
           audioUrl: rawAudioUrl,
           text,
           lang,
-          rate: 0.75,
+          rate,
           onEnd: () => {
             onPhaseChange?.('idle');
             onEnd?.();
