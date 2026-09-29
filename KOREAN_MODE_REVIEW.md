@@ -1,9 +1,9 @@
 # 한국어 텍스트 버전 — 현행 main 기준 코멘트
 
-> 기준: `main` @ `b92342cb` (2026-09-29 06:36 UTC)
+> 기준: `main` @ `b92342cb` (2026-09-29 06:36 UTC). 이 문서 커밋은 그 뒤의 docs 커밋이다.
 > 직전 제품 커밋: `acdd3e79` — 프록시/레이트리밋, Firestore database ID, `KOREAN_LEARNING_SPEC.md` 추가
 > 대상 기획: [KOREAN_LEARNING_SPEC.md](./KOREAN_LEARNING_SPEC.md)
-> 첫 실험 사진: [docs/korean-pilot-page.jpg](./docs/korean-pilot-page.jpg)
+> 첫 실험 사진: 투자서 한 페이지. 저장소에는 아직 없다. 텍스트 커밋 API가 JPEG 바이트를 받지 못해 올리지 못했다. 원본은 프로젝트 폴더 `korean-pilot-page.jpg`에 있다.
 > 이 문서는 구현 지시가 아니다. 그 기획을 지금 코드에 맞춰 고치라는 리뷰다.
 
 `b92342cb`는 이 리뷰의 이전 판만 넣었다. 그 이후로 코드 커밋은 없다. 한국어 카드, 로마자, 격식 배지, 모드 분기는 아직 없다.
@@ -45,7 +45,7 @@
 
 ## 4. 첫 실험 사진
 
-[docs/korean-pilot-page.jpg](./docs/korean-pilot-page.jpg)는 투자서 한 페이지다. 궁 안내문보다 이 기획의 입력에 가깝다.
+투자서 한 페이지다. 궁 안내문보다 이 기획의 입력에 가깝다.
 
 이 사진으로 보면 안 되는 것.
 
