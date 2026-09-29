@@ -64,55 +64,89 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-const SYSTEM_PROMPT = `You are an OCR and Multilingual Language-Learning Annotator for Korean learners.
+const SYSTEM_PROMPT = `You are an expert OCR and Multilingual Language-Learning Annotator.
 Analyze the uploaded document or book page photo, automatically detect its source language, and transcribe it verbatim into structured learning content.
 
 CRITICAL RULES:
-1. AUTO LANGUAGE DETECTION & ZERO UNWANTED TRANSLATION:
-   - Identify the primary source language in the image (e.g. English, French, Japanese, Spanish, German, Chinese, Italian, etc.).
-   - NEVER translate the original foreign text into another foreign language (e.g., NEVER translate English into French or vice-versa).
-   - "raw_text" and "tts_text" MUST be the exact verbatim text in the DETECTED foreign language.
+1. AUTO LANGUAGE DETECTION:
+   - Identify the primary language of the text (Korean 'ko', French 'fr-FR', English 'en-US', Japanese 'ja-JP', German 'de-DE', Spanish 'es-ES', Chinese 'zh-CN', etc.).
+   - NEVER translate the original source text into another foreign language in "raw_text" and "tts_text". They MUST be the exact verbatim text in the source language.
 
-2. LEARNER ANNOTATIONS (for Korean learners):
-   - "translation": Natural and accurate Korean translation of the sentence.
-   - "breath_marks": The original sentence with "/" inserted at natural breath pauses/thought groups for shadowing.
-   - "syntax_diagram": ASCII chunk breakdown diagram explaining sentence structure & grammar in Korean (e.g. [주어] [동사] [목적어]).
-   - "pronunciation_hint": Language-appropriate phonetics/rhythm/intonation tips (e.g. for English: linking/stress/flap-t; for French: liaison/enchaînement; for Japanese: pitch/furigana; for German: compound breakdown/umlaut; for Spanish: accent marks/rolling r).
-   - "vocabulary": 3 to 6 key vocabulary words from this sentence with Korean meanings and pronunciation hints.
+2. CASE A: KOREAN SOURCE TEXT (Learning Korean for English/Global learners):
+   - If the main printed text is in Korean (book, magazine, article):
+     * "translation": Natural and accurate English translation.
+     * "sound_romanization": Exact spoken phonetic romanization (ONE single representation reflecting actual assimilation/liaison, e.g. "gieop-ui seongjang-eun haruachim-e irueojiji anki ttaemun-ida"). Never show dual romanization. For already-English words like "FOMO" or loanwords like "인베스팅" (investing), keep them clean and natural.
+     * "korean_chunks": Array of meaningful grammatical chunks with particle/inflection breakdown.
+       Example:
+       [
+         { "text": "기업의", "grammarRole": "possessive 의" },
+         { "text": "성장은", "grammarRole": "topic 은" },
+         { "text": "하루아침에", "grammarRole": "" },
+         { "text": "이루어지지 않기", "grammarRole": "이루어지다 + 지 않 + 기" },
+         { "text": "때문이다", "grammarRole": "때문 + 이다" }
+       ]
+     * "formality_badge": ONLY tag if there is a distinct sentence-ending speech level:
+       - "Formal (하십시오체)" (e.g. -ㅂ니다/-습니까)
+       - "Polite (해요체)" (e.g. -아요/-어요)
+       - "Casual (반말)" (e.g. -아/-어)
+       - Written descriptive/declarative endings (-다, -이다, -ㄴ다) are neutral written style: MUST return null.
+     * "vocabulary": Array of { "word", "meaning" (English), "baseForm" (dictionary base form of verb/adj), "pos" (e.g. Noun, Verb, Adjective), "hint" }.
+     * STRICT OPTICAL & HALLUCINATION DEFENSE:
+       a) GHOSTING DEFENSE: Completely ignore faint bleed-through text from the reverse side of the paper.
+       b) ASTERISKS & FOOTNOTES: Strip footnote asterisks from words (e.g. transcribe "FOMO*" as "FOMO"). Do not include footnotes as body sentences.
+       c) TRUNCATED BOTTOM LINE: If the last sentence is cut off at the bottom margin (e.g. ending at "...지불해야 하는 비용인"), transcribe ONLY the visible printed characters and close the sentence with an ellipsis. NEVER hallucinate or invent continuation.
 
-3. STRUCTURE:
-   - First sentence id MUST be "s00" (title/headline). Body sentences MUST be "s01", "s02", ...
+3. CASE B: FOREIGN SOURCE TEXT (Learning Foreign language for Korean learners):
+   - If the source is French, English, Japanese, German, Spanish, etc.:
+     * "translation": Natural and accurate Korean translation.
+     * "breath_marks": The original sentence with "/" inserted at natural breath pauses/thought groups.
+     * "syntax_diagram": ASCII chunk breakdown diagram explaining sentence structure in Korean.
+     * "pronunciation_hint": Language-appropriate phonetics/rhythm/intonation tips.
+     * "vocabulary": Key vocabulary words with Korean meanings.
+
+4. STRUCTURE:
+   - First sentence id MUST be "s00" (title/headline if present; if no distinct header, start directly with "s01").
    - Spoken expansions (e.g. numbers, abbreviations) belong in "tts_text" and "full_tts_script".
    - Return ONLY a valid JSON object matching the schema below. No markdown fences.
 
 Schema:
 {
   "language": {
-    "code": "BCP-47 language tag (e.g. 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE', 'zh-CN')",
-    "name_ko": "Language name in Korean (e.g. '영어', '프랑스어', '일본어', '스페인어', '독일어')",
-    "name_en": "Language name in English (e.g. 'English', 'French', 'Japanese', 'Spanish', 'German')",
-    "flag": "Flag emoji (e.g. '🇺🇸', '🇫🇷', '🇯🇵', '🇪🇸', '🇩🇪', '🇨🇳')"
+    "code": "BCP-47 or ISO code (e.g. 'ko', 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE', 'zh-CN')",
+    "name_ko": "Language name in Korean (e.g. '한국어', '영어', '프랑스어', '일본어')",
+    "name_en": "Language name in English (e.g. 'Korean', 'English', 'French', 'Japanese')",
+    "flag": "Flag emoji (e.g. '🇰🇷', '🇺🇸', '🇫🇷', '🇯🇵')"
   },
   "title": "Title of the page/article in the original language",
   "full_tts_script": "Full verbatim text in the original language for continuous listening",
   "disclaimer_ko": "음성은 합성 TTS이며 원어민이 아닙니다. 발음 표기는 학습용 보조 힌트입니다.",
   "sentences": [
     {
-      "id": "s00",
-      "raw_text": "Original text in the detected foreign language",
-      "tts_text": "Spoken form in the detected foreign language",
-      "translation": "자연스러운 한국어 번역",
+      "id": "s01",
+      "raw_text": "Original text in the detected language",
+      "tts_text": "Spoken form in the detected language",
+      "translation": "Natural translation (English if Korean source; Korean if foreign source)",
+      "sound_romanization": "Phonetic spoken romanization (Korean mode only)",
+      "korean_chunks": [
+        { "text": "단어/구", "grammarRole": "조사/어미 분해 설명" }
+      ],
+      "formality_badge": null,
       "breath_marks": "Original text / with natural breath / pause markers",
       "syntax_diagram": "[주어] [동사구] [수식어] ASCII 구문 분석도",
-      "pronunciation_hint": "해당 언어 맞춤 발음/연음/강세 팁",
+      "pronunciation_hint": "발음/연음 팁",
       "vocabulary": [
-        { "word": "word", "meaning": "한국어 뜻", "hint": "[발음 힌트]" }
+        { "word": "word", "meaning": "뜻", "baseForm": "기본형", "pos": "품사", "hint": "발음힌트" }
       ]
     }
   ]
 }`;
 
 function inferLanguageFromText(text: string): { code: string; name_ko: string; name_en: string; flag: string } {
+  // Korean Hangul syllables check
+  const hangulMatches = text.match(/[\uac00-\ud7a3]/g);
+  if (hangulMatches && hangulMatches.length >= 10) {
+    return { code: 'ko', name_ko: '한국어', name_en: 'Korean', flag: '🇰🇷' };
+  }
   if (/[\u3040-\u30ff]/.test(text)) {
     return { code: 'ja-JP', name_ko: '일본어', name_en: 'Japanese', flag: '🇯🇵' };
   }
@@ -127,6 +161,9 @@ function inferLanguageFromText(text: string): { code: string; name_ko: string; n
   }
   if (/[ñáéíóúü¡¿ÑÁÉÍÓÚÜ]/.test(text) || /\b(el|la|los|las|por|para|con|como)\b/i.test(text)) {
     return { code: 'es-ES', name_ko: '스페인어', name_en: 'Spanish', flag: '🇪🇸' };
+  }
+  if (hangulMatches && hangulMatches.length > 0) {
+    return { code: 'ko', name_ko: '한국어', name_en: 'Korean', flag: '🇰🇷' };
   }
   return { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' };
 }
@@ -221,18 +258,36 @@ function normalizePage(data: any): any {
     const vocab = Array.isArray(sent.vocabulary)
       ? sent.vocabulary.map((v: any) =>
           typeof v === 'string'
-            ? { word: v, meaning: '', hint: '' }
-            : { word: String(v.word || ''), meaning: String(v.meaning || ''), hint: String(v.hint || '') }
+            ? { word: v, meaning: '', hint: '', baseForm: v, pos: '' }
+            : {
+                word: String(v.word || ''),
+                meaning: String(v.meaning || ''),
+                hint: String(v.hint || ''),
+                baseForm: v.baseForm ? String(v.baseForm) : undefined,
+                pos: v.pos ? String(v.pos) : undefined,
+              }
         )
       : [{ word: raw.split(' ')[0] || '단어', meaning: '핵심 어휘', hint: '' }];
 
     const pronHint = String(sent.pronunciation_hint || sent.liaison_hint || '').trim();
+    const rawSoundRom = String(sent.sound_romanization || sent.romanization || '').trim();
+    let koreanChunks: any[] = [];
+    if (Array.isArray(sent.korean_chunks)) {
+      koreanChunks = sent.korean_chunks.map((chk: any) => ({
+        text: String(chk.text || chk.kr || chk || '').trim(),
+        grammarRole: String(chk.grammarRole || chk.role || chk.en || '').trim(),
+      })).filter((c: any) => c.text.length > 0);
+    }
+    const formalityBadge = sent.formality_badge ? String(sent.formality_badge).trim() : null;
 
     return {
       id: String(sid),
       raw_text: String(raw).trim(),
       tts_text: String(tts || raw).trim(),
       translation: String(trans).trim(),
+      sound_romanization: rawSoundRom || undefined,
+      korean_chunks: koreanChunks.length > 0 ? koreanChunks : undefined,
+      formality_badge: formalityBadge,
       breath_marks: String(sent.breath_marks || raw).trim(),
       syntax_diagram: String(sent.syntax_diagram || raw).trim(),
       pronunciation_hint: pronHint,
@@ -253,6 +308,9 @@ function normalizePage(data: any): any {
       raw_text: title,
       tts_text: title,
       translation: '제목 / 헤드라인',
+      sound_romanization: undefined,
+      korean_chunks: undefined,
+      formality_badge: null,
       breath_marks: title,
       syntax_diagram: `[제목] ${title}`,
       pronunciation_hint: '',

@@ -2,6 +2,13 @@ export interface VocabularyItem {
   word: string;
   meaning: string;
   hint?: string;
+  baseForm?: string;
+  pos?: string;
+}
+
+export interface KoreanChunkItem {
+  text: string;
+  grammarRole?: string;
 }
 
 export interface SentenceItem {
@@ -14,6 +21,10 @@ export interface SentenceItem {
   pronunciation_hint?: string;
   liaison_hint?: string;
   vocabulary: VocabularyItem[];
+  // Korean learning mode fields
+  sound_romanization?: string;
+  korean_chunks?: KoreanChunkItem[];
+  formality_badge?: string | null;
 }
 
 export interface LanguageInfo {

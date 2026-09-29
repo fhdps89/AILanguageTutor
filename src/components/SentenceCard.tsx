@@ -35,6 +35,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const langParam = language?.name_en || language?.code || 'en-US';
   const pronHint = sentence.pronunciation_hint || sentence.liaison_hint;
   const isFrench = (language?.code || '').startsWith('fr');
+  const isKoreanMode = (language?.code || '').startsWith('ko');
 
   const handlePlayNative = () => {
     if (isPlayingNative) {
@@ -219,6 +220,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               {language.flag} {language.name_ko}
             </span>
           )}
+          {sentence.formality_badge && (
+            <span className="inline-flex items-center text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300">
+              🏷️ {sentence.formality_badge}
+            </span>
+          )}
           {isBookmarked && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
               📍 내일은 여기서부터 시작
@@ -269,6 +275,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             playbackTime.duration
           )}
         </p>
+        {isKoreanMode && sentence.sound_romanization && (
+          <div className="mt-2 text-xs sm:text-sm text-slate-500 font-mono tracking-wide">
+            🗣️ <span className="italic text-slate-600">{sentence.sound_romanization}</span>
+          </div>
+        )}
       </div>
 
       {/* Audio Controls */}
@@ -348,18 +359,58 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         )}
       </div>
 
-      {/* Korean Translation */}
+      {/* Translation */}
       <div className="mb-4">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-          한국어 번역:
+          {isKoreanMode ? '영어 번역 (English Translation):' : '한국어 번역:'}
         </span>
         <p className="text-sm text-slate-700 leading-normal">
           {sentence.translation}
         </p>
       </div>
 
-      {/* Breath marks (끊어 읽기) */}
-      {sentence.breath_marks && sentence.breath_marks !== sentence.raw_text && (
+      {/* Korean Morphological Chunks or Standard Breath Marks */}
+      {isKoreanMode && sentence.korean_chunks && sentence.korean_chunks.length > 0 ? (
+        <div className="mb-4 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+            <span className="text-[11px] font-bold text-slate-600">
+              조사·어미 및 형태소 청크 (Grammar & Chunks):
+            </span>
+            <span className="text-[11px] text-indigo-600 font-medium">
+              💡 청크를 터치하면 1.0x 발음이 재생됩니다
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 leading-relaxed">
+            {sentence.korean_chunks.map((chk, idx) => {
+              const isPlayingThis = activeChunk === chk.text;
+              return (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-md p-1 px-2.5 shadow-2xs hover:border-indigo-300 transition"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handlePlayChunk(chk.text)}
+                    className={`inline-flex items-center gap-1 text-xs sm:text-sm font-serif font-medium transition cursor-pointer ${
+                      isPlayingThis ? 'text-indigo-600 font-bold' : 'text-slate-900 hover:text-indigo-600'
+                    }`}
+                    title={`"${chk.text}" 1.0x 발음 듣기`}
+                  >
+                    <Volume2 className={`h-3.5 w-3.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-slate-400'}`} />
+                    <span>{chk.text}</span>
+                  </button>
+                  {chk.grammarRole && (
+                    <span className="text-[10px] font-mono font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                      {chk.grammarRole}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : sentence.breath_marks && sentence.breath_marks !== sentence.raw_text ? (
         <div className="mb-4 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
             <span className="text-[11px] font-bold text-slate-600">
@@ -398,10 +449,10 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             })}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Syntax diagram */}
-      {sentence.syntax_diagram && (
+      {sentence.syntax_diagram && !isKoreanMode && (
         <div className="mb-4">
           <span className="text-[11px] font-bold text-slate-500 block mb-1">
             구문 분해 (문장 구조도):
@@ -417,7 +468,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
             <span className="text-[11px] font-bold text-slate-600">
-              핵심 어휘:
+              {isKoreanMode ? '핵심 어휘 (Vocabulary & Base Form):' : '핵심 어휘:'}
             </span>
             <span className="text-[11px] text-indigo-600 font-medium">
               💡 단어를 터치하면 1.0x 발음을 들을 수 있습니다
@@ -442,13 +493,25 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                   <div className="flex items-start gap-1.5">
                     <Volume2 className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-indigo-400'}`} />
                     <div>
-                      <span className="font-semibold text-slate-900 font-serif">
-                        {v.word}
-                      </span>
-                      {v.hint && (
-                        <span className="ml-1.5 text-[11px] text-amber-700 font-mono">
-                          {v.hint}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-slate-900 font-serif">
+                          {v.word}
                         </span>
+                        {v.baseForm && v.baseForm !== v.word && (
+                          <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-mono">
+                            원형: {v.baseForm}
+                          </span>
+                        )}
+                        {v.pos && (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            [{v.pos}]
+                          </span>
+                        )}
+                      </div>
+                      {v.hint && (
+                        <div className="text-[11px] text-amber-700 font-mono mt-0.5">
+                          {v.hint}
+                        </div>
                       )}
                     </div>
                   </div>

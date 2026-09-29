@@ -6,3 +6,5 @@ dist/
 cache/tts/
 cache/*/page.jpg
 cache/*/page.png
+firebase-applet-config.json
+
