@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
 import { Play, Pause, Repeat, Mic, Volume2, Bookmark } from 'lucide-react';
 import { playSentenceAudio, playPracticeTrack, stopAllAudio } from '../utils/audio';
+import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 
 interface SentenceCardProps {
   sentence: SentenceItem;
@@ -25,6 +26,10 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const [practiceRate, setPracticeRate] = useState<0.5 | 0.75>(0.75);
   const [activeChunk, setActiveChunk] = useState<string | null>(null);
   const [activeVocab, setActiveVocab] = useState<string | null>(null);
+  const [playbackTime, setPlaybackTime] = useState<{ currentTime: number; duration: number }>({
+    currentTime: 0,
+    duration: 0,
+  });
 
   const textToSpeak = sentence.tts_text || sentence.raw_text;
   const langParam = language?.name_en || language?.code || 'en-US';
@@ -35,6 +40,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     if (isPlayingNative) {
       stopAllAudio();
       setIsPlayingNative(false);
+      setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
 
@@ -42,6 +48,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     setPracticePhase('idle');
     setActiveChunk(null);
     setActiveVocab(null);
+    setPlaybackTime({ currentTime: 0, duration: 0 });
 
     playSentenceAudio({
       audioUrl: rawAudioUrl,
@@ -49,8 +56,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       lang: langParam,
       rate: 1.0,
       onStart: () => setIsPlayingNative(true),
-      onEnd: () => setIsPlayingNative(false),
-      onError: () => setIsPlayingNative(false),
+      onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
+      onEnd: () => {
+        setIsPlayingNative(false);
+        setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
+      onError: () => {
+        setIsPlayingNative(false);
+        setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
     });
   };
 
@@ -58,6 +72,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     if (practicePhase !== 'idle' && practiceRate === rate) {
       stopAllAudio();
       setPracticePhase('idle');
+      setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
 
@@ -66,6 +81,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     setActiveChunk(null);
     setActiveVocab(null);
     setPracticeRate(rate);
+    setPlaybackTime({ currentTime: 0, duration: 0 });
 
     playPracticeTrack({
       practiceAudioUrl,
@@ -73,8 +89,17 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: textToSpeak,
       lang: langParam,
       rate,
-      onPhaseChange: (phase) => setPracticePhase(phase),
-      onEnd: () => setPracticePhase('idle'),
+      onPhaseChange: (phase) => {
+        setPracticePhase(phase);
+        if (phase === 'pause' || phase === 'idle') {
+          setPlaybackTime({ currentTime: 0, duration: 0 });
+        }
+      },
+      onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
+      onEnd: () => {
+        setPracticePhase('idle');
+        setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
     });
   };
 
@@ -82,6 +107,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     if (activeChunk === chunkText) {
       stopAllAudio();
       setActiveChunk(null);
+      setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
 
@@ -90,13 +116,21 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     setPracticePhase('idle');
     setActiveVocab(null);
     setActiveChunk(chunkText);
+    setPlaybackTime({ currentTime: 0, duration: 0 });
 
     playSentenceAudio({
       text: chunkText,
       lang: langParam,
       rate: 1.0,
-      onEnd: () => setActiveChunk(null),
-      onError: () => setActiveChunk(null),
+      onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
+      onEnd: () => {
+        setActiveChunk(null);
+        setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
+      onError: () => {
+        setActiveChunk(null);
+        setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
     });
   };
 
@@ -120,6 +154,49 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       onEnd: () => setActiveVocab(null),
       onError: () => setActiveVocab(null),
     });
+  };
+
+  const renderKaraokeText = (
+    text: string,
+    isAudioPlaying: boolean,
+    currentTime: number,
+    duration: number
+  ) => {
+    if (!isAudioPlaying || duration <= 0) {
+      return <span className="text-slate-900 font-serif leading-relaxed">{text}</span>;
+    }
+
+    const timeline = buildKaraokeTimeline(text, duration);
+    if (!timeline.spans || timeline.spans.length === 0) {
+      return <span className="text-slate-900 font-serif leading-relaxed">{text}</span>;
+    }
+
+    return (
+      <span className="font-serif leading-relaxed">
+        {timeline.spans.map((span, idx) => {
+          if (!span.isWord) {
+            return <span key={idx}>{span.token}</span>;
+          }
+
+          const status = getSpanStatus(span, currentTime, duration);
+
+          return (
+            <span
+              key={idx}
+              className={`transition-colors duration-100 rounded-xs px-0.5 ${
+                status === 'current'
+                  ? 'text-blue-600 bg-blue-100 font-bold'
+                  : status === 'past'
+                  ? 'text-blue-700 bg-blue-50/60 font-semibold'
+                  : 'text-slate-900'
+              }`}
+            >
+              {span.token}
+            </span>
+          );
+        })}
+      </span>
+    );
   };
 
   return (
@@ -174,11 +251,23 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
       {/* Target Language Text */}
       <div className="mb-4">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-          {language ? `${language.flag} ${language.name_ko} (${language.name_en}):` : '원문:'}
-        </span>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            {language ? `${language.flag} ${language.name_ko} (${language.name_en}):` : '원문:'}
+          </span>
+          {(isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2') && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
+              🎤 노래방 실시간 하이라이팅 중
+            </span>
+          )}
+        </div>
         <p className="text-lg font-medium text-slate-900 leading-relaxed font-serif">
-          {sentence.raw_text}
+          {renderKaraokeText(
+            sentence.raw_text,
+            isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2',
+            playbackTime.currentTime,
+            playbackTime.duration
+          )}
         </p>
       </div>
 
@@ -206,17 +295,17 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               ? 'bg-indigo-600 text-white hover:bg-indigo-700'
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
           }`}
-          title="0.75배속으로 듣고 따라하기 자동 반복"
+          title="여유로운 원어민 학습 템포(0.75x)로 듣고 따라하기 자동 반복"
         >
           {practicePhase !== 'idle' && practiceRate === 0.75 ? (
             <Pause className="h-3.5 w-3.5" />
           ) : (
             <Repeat className="h-3.5 w-3.5" />
           )}
-          0.75x 연습 (루프)
+          0.75x 쉐도잉 (여유 템포)
         </button>
 
-        {/* Practice 0.5x button (초보자용 느린 연습) */}
+        {/* Practice 0.5x button (초보자용 느린 조음 연습) */}
         <button
           onClick={() => handlePlayPractice(0.5)}
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
@@ -224,14 +313,14 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
               : 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50/70'
           }`}
-          title="초보자를 위한 0.5배속 천천히 듣고 따라하기 자동 반복"
+          title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 듣고 따라하기"
         >
           {practicePhase !== 'idle' && practiceRate === 0.5 ? (
             <Pause className="h-3.5 w-3.5" />
           ) : (
             <Repeat className="h-3.5 w-3.5" />
           )}
-          0.5x 느린 연습 (초보자)
+          0.5x 조음 훈련 (또박또박)
         </button>
 
         {/* Practice phase indicator badge */}

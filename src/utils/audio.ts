@@ -6,11 +6,21 @@
 let activeAudio: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let practiceTimer: any = null;
+let activeRafId: number | null = null;
+let currentPlayId = 0;
 
 export function stopAllAudio() {
+  currentPlayId++;
+  if (activeRafId) {
+    cancelAnimationFrame(activeRafId);
+    activeRafId = null;
+  }
   if (activeAudio) {
     activeAudio.pause();
-    activeAudio.currentTime = 0;
+    activeAudio.onplay = null;
+    activeAudio.onended = null;
+    activeAudio.onerror = null;
+    activeAudio.src = '';
     activeAudio = null;
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -24,7 +34,48 @@ export function stopAllAudio() {
 }
 
 /**
- * Play native Gemini TTS audio (/api/tts) or fallback to Web Speech API
+ * Resolves a reliable hash-based audio stream URL for Gemini Native TTS.
+ * When speed is 0.75 or 0.5, requests the server to prepare native articulated speech.
+ */
+async function resolveAudioUrl(
+  audioUrl: string | null | undefined,
+  text: string,
+  lang: string,
+  speed: string
+): Promise<string> {
+  // If already a clean hash URL with matching speed 1.0, return directly
+  if (audioUrl && /^\/api\/tts\/[a-f0-9]{64}$/.test(audioUrl) && speed === '1.0') {
+    return audioUrl;
+  }
+
+  // Request server to prepare hash-based audio via POST (solves URL length limit & query logging)
+  try {
+    const res = await fetch('/api/tts/prepare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        lang,
+        speed,
+        voice: 'Kore',
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audioUrl) {
+        return data.audioUrl;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to prepare hash audio, falling back to query route', e);
+  }
+
+  // Fallback to GET endpoint
+  return `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}`;
+}
+
+/**
+ * Play native Gemini TTS audio (/api/tts/:hash) or fallback to Web Speech API
  */
 export async function playSentenceAudio({
   audioUrl,
@@ -32,6 +83,7 @@ export async function playSentenceAudio({
   lang = 'en-US',
   rate = 1.0,
   onStart,
+  onTimeUpdate,
   onEnd,
   onError,
 }: {
@@ -40,10 +92,12 @@ export async function playSentenceAudio({
   lang?: string;
   rate?: number;
   onStart?: () => void;
+  onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
   onError?: (err: any) => void;
 }) {
   stopAllAudio();
+  const thisPlayId = currentPlayId;
 
   const cleanText = (text || '').trim();
   if (!cleanText) {
@@ -51,45 +105,89 @@ export async function playSentenceAudio({
     return;
   }
 
-  // Construct target audio URL:
-  // When rate is 0.75 or 0.5, request Gemini TTS to speak at that exact pace natively
-  // without browser DSP time-stretching (eliminates crackling / "지지직" robotic noise).
   const speedParam = rate === 1.0 ? '1.0' : String(rate);
-  let targetAudioUrl: string;
+  const targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam);
 
-  if (audioUrl && audioUrl.includes('/api/tts')) {
-    const base = audioUrl.replace(/([?&])(speed|rate)=[^&]*/g, '$1').replace(/[?&]$/, '');
-    const cleanSep = base.includes('?') ? '&' : '?';
-    targetAudioUrl = `${base}${cleanSep}speed=${speedParam}`;
-  } else if (!audioUrl || rate !== 1.0) {
-    targetAudioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}&speed=${speedParam}`;
-  } else {
-    targetAudioUrl = audioUrl;
+  // If user triggered another sound while we were resolving URL, abort
+  if (thisPlayId !== currentPlayId) {
+    return;
   }
 
   try {
     const audio = new Audio(targetAudioUrl);
-    // Since Gemini TTS itself articulates naturally at the target speed,
-    // playbackRate stays 1.0 to preserve pristine acoustic quality without distortion.
     audio.playbackRate = 1.0;
     activeAudio = audio;
 
-    audio.onplay = () => onStart?.();
-    audio.onended = () => {
-      activeAudio = null;
-      onEnd?.();
+    const startProgressLoop = () => {
+      if (activeRafId) {
+        cancelAnimationFrame(activeRafId);
+        activeRafId = null;
+      }
+      const tick = () => {
+        if (thisPlayId !== currentPlayId || !activeAudio || activeAudio !== audio || audio.paused || audio.ended) {
+          return;
+        }
+        const currentTime = audio.currentTime;
+        const duration = audio.duration;
+        if (duration && !isNaN(duration) && duration > 0) {
+          const ratio = Math.min(1.0, Math.max(0.0, currentTime / duration));
+          onTimeUpdate?.({ currentTime, duration, ratio });
+        }
+        activeRafId = requestAnimationFrame(tick);
+      };
+      activeRafId = requestAnimationFrame(tick);
     };
+
+    audio.onplay = () => {
+      if (thisPlayId === currentPlayId) {
+        onStart?.();
+        startProgressLoop();
+      }
+    };
+
+    audio.ontimeupdate = () => {
+      if (thisPlayId === currentPlayId && audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+        const currentTime = audio.currentTime;
+        const duration = audio.duration;
+        const ratio = Math.min(1.0, Math.max(0.0, currentTime / duration));
+        onTimeUpdate?.({ currentTime, duration, ratio });
+      }
+    };
+
+    audio.onended = () => {
+      if (thisPlayId === currentPlayId) {
+        if (activeRafId) {
+          cancelAnimationFrame(activeRafId);
+          activeRafId = null;
+        }
+        activeAudio = null;
+        onTimeUpdate?.({ currentTime: audio.duration || 0, duration: audio.duration || 1, ratio: 1.0 });
+        onEnd?.();
+      }
+    };
+
     audio.onerror = (e) => {
-      console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
-      activeAudio = null;
-      speakWebSpeech(cleanText, rate, lang, onStart, onEnd, onError);
+      if (thisPlayId === currentPlayId) {
+        if (activeRafId) {
+          cancelAnimationFrame(activeRafId);
+          activeRafId = null;
+        }
+        console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
+        activeAudio = null;
+        speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
+      }
     };
 
     await audio.play();
-    return;
   } catch (err) {
-    console.warn('Audio play error, falling back to Web Speech', err);
-    speakWebSpeech(cleanText, rate, lang, onStart, onEnd, onError);
+    if (thisPlayId === currentPlayId) {
+      if (activeRafId) {
+        cancelAnimationFrame(activeRafId);
+        activeRafId = null;
+      }
+      console.warn('Audio play error, falling back to Web Speech', err);
+      speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
+    }
   }
 }
 
@@ -97,10 +195,14 @@ function speakWebSpeech(
   text: string,
   rate: number,
   lang: string = 'en-US',
+  playId: number,
   onStart?: () => void,
+  onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void,
   onEnd?: () => void,
   onError?: (err: any) => void
 ) {
+  if (playId !== currentPlayId) return;
+
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     onError?.(new Error('Speech synthesis not supported in this browser'));
     onEnd?.();
@@ -116,7 +218,6 @@ function speakWebSpeech(
   const voices = window.speechSynthesis.getVoices();
   const langPrefix = lang.split(/[-_]/)[0].toLowerCase();
 
-  // Find most matching voice: exact match -> prefix match -> fuzzy match
   const matchedVoice =
     voices.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
     voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix)) ||
@@ -127,17 +228,35 @@ function speakWebSpeech(
   }
 
   utterance.onstart = () => {
-    activeUtterance = utterance;
-    onStart?.();
+    if (playId === currentPlayId) {
+      activeUtterance = utterance;
+      onStart?.();
+      onTimeUpdate?.({ currentTime: 0, duration: 1, ratio: 0 });
+    }
   };
+
+  utterance.onboundary = (e) => {
+    if (playId === currentPlayId && text.length > 0) {
+      const charIndex = e.charIndex || 0;
+      const ratio = Math.min(1.0, Math.max(0.0, charIndex / text.length));
+      onTimeUpdate?.({ currentTime: charIndex, duration: text.length, ratio });
+    }
+  };
+
   utterance.onend = () => {
-    activeUtterance = null;
-    onEnd?.();
+    if (playId === currentPlayId) {
+      activeUtterance = null;
+      onTimeUpdate?.({ currentTime: text.length, duration: text.length, ratio: 1.0 });
+      onEnd?.();
+    }
   };
+
   utterance.onerror = (err) => {
-    activeUtterance = null;
-    onError?.(err);
-    onEnd?.();
+    if (playId === currentPlayId) {
+      activeUtterance = null;
+      onError?.(err);
+      onEnd?.();
+    }
   };
 
   window.speechSynthesis.speak(utterance);
@@ -153,6 +272,7 @@ export async function playPracticeTrack({
   lang = 'en-US',
   rate = 0.75,
   onPhaseChange,
+  onTimeUpdate,
   onEnd,
 }: {
   practiceAudioUrl?: string | null;
@@ -161,10 +281,12 @@ export async function playPracticeTrack({
   lang?: string;
   rate?: number;
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void;
+  onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
 }) {
   stopAllAudio();
-  runClientPracticeLoop(rawAudioUrl, text, lang, rate, onPhaseChange, onEnd);
+  const thisPlayId = currentPlayId;
+  runClientPracticeLoop(rawAudioUrl, text, lang, rate, thisPlayId, onPhaseChange, onTimeUpdate, onEnd);
 }
 
 function runClientPracticeLoop(
@@ -172,9 +294,13 @@ function runClientPracticeLoop(
   text: string,
   lang: string = 'en-US',
   rate: number = 0.75,
+  playId: number,
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void,
+  onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void,
   onEnd?: () => void
 ) {
+  if (playId !== currentPlayId) return;
+
   // Step 1: play at specified practice rate (0.5x or 0.75x)
   onPhaseChange?.('playing1');
   const startTime = Date.now();
@@ -184,15 +310,19 @@ function runClientPracticeLoop(
     text,
     lang,
     rate,
+    onTimeUpdate,
     onEnd: () => {
+      if (playId !== currentPlayId) return;
+
       const duration = (Date.now() - startTime) / 1000;
-      // Generous pause duration for shadowing: minimum 2.5s or 1.25x the spoken duration
       const pauseDuration = Math.max(2500, duration * 1250);
 
       // Step 2: pause for student shadowing
       onPhaseChange?.('pause');
 
       practiceTimer = setTimeout(() => {
+        if (playId !== currentPlayId) return;
+
         // Step 3: repeat at practice rate
         onPhaseChange?.('playing2');
         playSentenceAudio({
@@ -200,16 +330,21 @@ function runClientPracticeLoop(
           text,
           lang,
           rate,
+          onTimeUpdate,
           onEnd: () => {
-            onPhaseChange?.('idle');
-            onEnd?.();
+            if (playId === currentPlayId) {
+              onPhaseChange?.('idle');
+              onEnd?.();
+            }
           },
         });
       }, pauseDuration);
     },
     onError: () => {
-      onPhaseChange?.('idle');
-      onEnd?.();
+      if (playId === currentPlayId) {
+        onPhaseChange?.('idle');
+        onEnd?.();
+      }
     },
   });
 }

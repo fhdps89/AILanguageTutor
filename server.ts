@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
@@ -16,7 +17,7 @@ const CACHE_DIR = process.env.FRENCH_TUTOR_CACHE || path.join(APP_DIR, 'cache');
 const DEMO_JSON_PATH = path.join(APP_DIR, 'demo_page.json');
 const LIBRARY_PATH = path.join(CACHE_DIR, 'library.json');
 const TTS_CACHE_DIR = path.join(CACHE_DIR, 'tts');
-const BUILD_VERSION = '20260928-multilingual-v6';
+const BUILD_VERSION = '20260928-multilingual-v7';
 
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -25,13 +26,29 @@ if (!fs.existsSync(TTS_CACHE_DIR)) {
   fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
 }
 
+// Security: Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { error: '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const analyzeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: '이미지 분석 요청 한도를 초과했습니다. 15분 후 다시 시도해주세요.' },
+});
+
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use('/api/', generalLimiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 const SYSTEM_PROMPT = `You are an OCR and Multilingual Language-Learning Annotator for Korean learners.
@@ -231,17 +248,27 @@ function normalizePage(data: any): any {
     });
   }
 
-  // Detect and resolve language info
+  // Detect and resolve language info: Vision output takes priority; regex heuristic is fallback
   const combinedText = cleaned.map(s => s.raw_text).join(' ');
-  const fallbackLang = inferLanguageFromText(combinedText);
   const rawLang = data.language && typeof data.language === 'object' ? data.language : {};
+  let language = { code: '', name_ko: '', name_en: '', flag: '' };
 
-  const language = {
-    code: String(rawLang.code || fallbackLang.code),
-    name_ko: String(rawLang.name_ko || fallbackLang.name_ko),
-    name_en: String(rawLang.name_en || fallbackLang.name_en),
-    flag: String(rawLang.flag || fallbackLang.flag),
-  };
+  if (rawLang.code && rawLang.name_ko) {
+    language = {
+      code: String(rawLang.code),
+      name_ko: String(rawLang.name_ko),
+      name_en: String(rawLang.name_en || rawLang.code),
+      flag: String(rawLang.flag || '🌐'),
+    };
+  } else {
+    const fallbackLang = inferLanguageFromText(combinedText);
+    language = {
+      code: String(rawLang.code || fallbackLang.code),
+      name_ko: String(rawLang.name_ko || fallbackLang.name_ko),
+      name_en: String(rawLang.name_en || fallbackLang.name_en),
+      flag: String(rawLang.flag || fallbackLang.flag),
+    };
+  }
 
   const fullTts = String(data.full_tts_script || cleaned.map(s => s.tts_text || s.raw_text).join(' ')).trim();
 
@@ -271,13 +298,43 @@ function extractJson(text: string): any {
 
 let lastTtsError = '';
 
+// In-Flight TTS Deduplication Map
+const inFlightTts = new Map<string, Promise<{ buffer: Buffer; mimeType: string; hash: string } | null>>();
+
+// Ensure raw PCM audio from Gemini has valid RIFF WAV header for browser audio playback
+function ensureWavHeader(rawBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitDepth = 16): any {
+  if (rawBuffer.length >= 4 && rawBuffer.toString('ascii', 0, 4) === 'RIFF') {
+    return rawBuffer;
+  }
+  const dataSize = rawBuffer.length;
+  const header = Buffer.alloc(44);
+  const blockAlign = (numChannels * bitDepth) / 8;
+  const byteRate = sampleRate * blockAlign;
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16); // Subchunk1Size
+  header.writeUInt16LE(1, 20);  // PCM format
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitDepth, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, rawBuffer]);
+}
+
 // Gemini High-Fidelity Native TTS Engine (gemini-3.8-flash-lite-tts)
 async function generateGeminiSpeech(
   text: string,
   langName?: string,
   voiceName: string = 'Kore',
   speed: string = '1.0'
-): Promise<{ buffer: Buffer; mimeType: string } | null> {
+): Promise<{ buffer: Buffer; mimeType: string; hash: string } | null> {
   const cleanText = String(text || '').trim();
   if (!cleanText) return null;
 
@@ -294,9 +351,14 @@ async function generateGeminiSpeech(
     try {
       const buffer = fs.readFileSync(cacheFile);
       if (buffer.length > 200) {
-        return { buffer, mimeType: 'audio/wav' };
+        return { buffer, mimeType: 'audio/wav', hash };
       }
     } catch {}
+  }
+
+  // Deduplicate in-flight concurrent requests for identical TTS text
+  if (inFlightTts.has(hash)) {
+    return inFlightTts.get(hash)!;
   }
 
   const geminiKey = findGeminiApiKey();
@@ -306,73 +368,79 @@ async function generateGeminiSpeech(
     return null;
   }
 
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: geminiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-
-    const langLabel = langName ? `native ${langName}` : 'native';
-    let promptStyle = '';
-
-    if (normalizedSpeed === '0.5' || normalizedSpeed === 'slowest') {
-      promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, carefully and smoothly pronouncing every single phoneme, vowel, and syllable in authentic ${langLabel}, with gentle phrasing and clear pauses between thought groups so that a beginner language learner can easily understand and shadow each sound.`;
-    } else if (normalizedSpeed === '0.75' || normalizedSpeed === 'slow') {
-      promptStyle = `Speak slowly, steadily, and clearly at a 0.75x relaxed learner pace, with crystal-clear enunciation, authentic ${langLabel} accent, natural breathing, and slightly relaxed tempo for shadowing practice without rushing.`;
-    } else {
-      promptStyle = `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation, clear intonation, and proper cadence for language learners.`;
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash-lite-tts',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: cleanText,
-              speechMetadata: {
-                style: promptStyle,
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName || 'Kore' },
+  const speechPromise = (async () => {
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: geminiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
           },
         },
-      },
-    });
+      });
 
-    const candidate = response.candidates?.[0]?.content?.parts?.[0];
-    const base64Audio = candidate?.inlineData?.data;
-    const mimeType = candidate?.inlineData?.mimeType || 'audio/wav';
+      const langLabel = langName ? `native ${langName}` : 'native';
+      let promptStyle = '';
 
-    if (base64Audio) {
-      const buffer = Buffer.from(base64Audio, 'base64');
-      try {
-        fs.writeFileSync(cacheFile, buffer);
-      } catch (err) {
-        console.warn('Failed to cache TTS file:', err);
+      if (normalizedSpeed === '0.5' || normalizedSpeed === 'slowest') {
+        promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, carefully pronouncing every single phoneme in authentic ${langLabel}, with clear pauses between thought groups.`;
+      } else if (normalizedSpeed === '0.75' || normalizedSpeed === 'slow') {
+        promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in authentic ${langLabel}.`;
+      } else {
+        promptStyle = `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation and proper cadence.`;
       }
-      return { buffer, mimeType };
-    } else {
-      lastTtsError = 'Candidate returned no inlineData audio: ' + JSON.stringify(response.candidates);
-    }
-  } catch (err: any) {
-    lastTtsError = (err.message || String(err)) + ' [key: ' + (geminiKey ? geminiKey.slice(0, 8) + '...' + geminiKey.slice(-4) + ', len=' + geminiKey.length : 'none') + ']';
-    console.error('Gemini TTS synthesis failed:', err.message);
-  }
 
-  return null;
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash-lite-tts',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: cleanText,
+                speechMetadata: {
+                  style: promptStyle,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: voiceName || 'Kore' },
+            },
+          },
+        },
+      });
+
+      const candidate = response.candidates?.[0]?.content?.parts?.[0];
+      const base64Audio = candidate?.inlineData?.data;
+
+      if (base64Audio) {
+        let buffer = Buffer.from(base64Audio, 'base64');
+        buffer = ensureWavHeader(buffer);
+        try {
+          fs.writeFileSync(cacheFile, buffer);
+        } catch (err) {
+          console.warn('Failed to cache TTS file:', err);
+        }
+        return { buffer, mimeType: 'audio/wav', hash };
+      } else {
+        lastTtsError = 'Candidate returned no inlineData audio';
+      }
+    } catch (err: any) {
+      lastTtsError = err.message || String(err);
+      console.error('Gemini TTS synthesis failed:', err.message);
+    } finally {
+      inFlightTts.delete(hash);
+    }
+    return null;
+  })();
+
+  inFlightTts.set(hash, speechPromise);
+  return speechPromise;
 }
 
 // API Routes
@@ -426,14 +494,6 @@ app.get('/api/status', (_req: Request, res: Response) => {
 
   const activeOption = availableProviders.find(p => p.id === defaultProvider) || availableProviders[0];
 
-  const safeEnvKeys = Object.keys(process.env).filter(k =>
-    !k.startsWith('NVM') && !k.startsWith('PATH') && !k.startsWith('SHLVL') &&
-    !k.startsWith('CNB') && !k.startsWith('HOSTNAME') && !k.startsWith('HOME') &&
-    !k.startsWith('NODE') && !k.startsWith('LANG') && !k.startsWith('LC_') &&
-    !k.startsWith('K_') && !k.startsWith('NGINX') && !k.startsWith('CONTROL') &&
-    !k.startsWith('DEFAULT') && !k.startsWith('GOMEM') && !k.startsWith('NEXT')
-  );
-
   res.json({
     activeEngine: activeOption ? activeOption.name : getActiveEngine(),
     currentProvider: activeOption ? activeOption.id : defaultProvider,
@@ -443,7 +503,6 @@ app.get('/api/status', (_req: Request, res: Response) => {
     hasOpenRouter: openRouterKey,
     hasXAI: xaiKey,
     availableProviders,
-    envKeys: safeEnvKeys,
   });
 });
 
@@ -546,6 +605,11 @@ app.delete('/api/lesson/:key', (req: Request, res: Response) => {
     return res.status(400).json({ error: '유효하지 않은 키입니다.' });
   }
 
+  // Hardcoded defense: Prevent deletion of default demo lesson
+  if (safeKey === 'demo-arc') {
+    return res.status(403).json({ error: '기본 데모 교재(demo-arc)는 삭제할 수 없습니다.' });
+  }
+
   // Delete cached directory if it exists
   const lessonFolder = path.join(CACHE_DIR, safeKey);
   if (fs.existsSync(lessonFolder)) {
@@ -619,7 +683,55 @@ app.get('/api/audio/:key/:file', (req: Request, res: Response) => {
   }
 });
 
-// Gemini TTS API (gemini-3.8-flash-lite-tts) - High-Fidelity Native Audio
+// Stream cached TTS audio by hash (/api/tts/:hash)
+app.get('/api/tts/:hash', (req: Request, res: Response) => {
+  const rawHash = req.params.hash;
+  const safeHash = String(rawHash || '').replace(/[^a-fA-F0-9]/g, '');
+  if (!safeHash) {
+    return res.status(400).json({ error: '유효하지 않은 오디오 해시입니다.' });
+  }
+
+  const audioPath = path.join(TTS_CACHE_DIR, `${safeHash}.wav`);
+  if (!fs.existsSync(audioPath)) {
+    return res.status(404).json({ error: '오디오 파일을 찾을 수 없습니다.' });
+  }
+
+  const stat = fs.statSync(audioPath);
+  res.setHeader('Content-Type', 'audio/wav');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+  fs.createReadStream(audioPath).pipe(res);
+});
+
+// Prepare TTS via POST (avoids 414 URI Too Long)
+app.post('/api/tts/prepare', async (req: Request, res: Response) => {
+  const rawText = String(req.body.text || '').trim();
+  const rawLang = String(req.body.lang || '').trim();
+  const rawVoice = String(req.body.voice || 'Kore').trim();
+  const rawSpeed = String(req.body.speed || req.body.rate || '1.0').trim();
+
+  if (!rawText) {
+    return res.status(400).json({ error: 'Text parameter is required' });
+  }
+
+  try {
+    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed);
+    if (!result) {
+      return res.status(500).json({ error: 'Gemini TTS generation failed' });
+    }
+
+    return res.json({
+      hash: result.hash,
+      audioUrl: `/api/tts/${result.hash}`,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/tts/prepare:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Gemini TTS API - Legacy GET/POST fallback
 app.get('/api/tts', async (req: Request, res: Response) => {
   const rawText = String(req.query.text || '').trim();
   const rawLang = String(req.query.lang || '').trim();
@@ -670,7 +782,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/analyze', upload.single('photo'), async (req: Request, res: Response) => {
+app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
     let imageBuffer: Buffer | null = null;
 
@@ -802,29 +914,45 @@ app.post('/api/analyze', upload.single('photo'), async (req: Request, res: Respo
     } else if (findGeminiApiKey()) {
       const gKey = findGeminiApiKey()!;
       const ai = new GoogleGenAI({ apiKey: gKey });
-      const model = req.body.model || process.env.VISION_MODEL || 'gemini-3.8-flash';
-      console.log(`[OCR] Analyzing with Google Gemini model: ${model}`);
+      const primaryModel = req.body.model || process.env.VISION_MODEL || 'gemini-3.8-flash';
+      const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']));
+      
       const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
+      let lastError: any = null;
 
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image,
+      for (const modelCandidate of fallbackModels) {
+        try {
+          console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate}`);
+          const response = await ai.models.generateContent({
+            model: modelCandidate,
+            contents: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: base64Image,
+                },
+              },
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0,
             },
-          },
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0,
-        },
-      });
+          });
 
-      const responseText = response.text || '';
-      pageData = extractJson(responseText);
+          const responseText = response.text || '';
+          pageData = extractJson(responseText);
+          console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
+          break; // Success!
+        } catch (err: any) {
+          console.warn(`[OCR] Model ${modelCandidate} failed/timed out:`, err.message || err);
+          lastError = err;
+        }
+      }
+
+      if (!pageData) {
+        throw new Error(`Gemini 모델 분석 실패: ${lastError?.message || '모든 Gemini 모델 응답 불가'}`);
+      }
     } else {
       return res.status(400).json({
         error: 'Vision API 키가 설정되지 않았습니다. .env에 GEMINI_API_KEY 또는 OPENROUTER_API_KEY를 설정하거나 상단 [데모]를 이용해주세요.',

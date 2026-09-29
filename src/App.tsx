@@ -162,26 +162,11 @@ export function App() {
         }
       }
 
-      // Ensure demo-arc uses pure Gemini TTS endpoints and removes any legacy /api/audio references
-      if (loadedData && (key === 'demo-arc' || (loadedData.audioFiles && Object.values(loadedData.audioFiles).some(url => url.includes('/api/audio/demo-arc'))))) {
-        const langParam = loadedData.page.language?.name_en || 'French';
-        const fullText = (loadedData.page.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' ');
-        loadedData.audioFiles = {
-          'lecture_complete.mp3': `/api/tts?text=${encodeURIComponent(fullText)}&lang=${encodeURIComponent(langParam)}`,
-          ...Object.fromEntries(
-            (loadedData.page.sentences || []).map((s: any) => [
-              `${s.id}.mp3`,
-              `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`,
-            ])
-          ),
-        };
-      }
-
+      // Cache cleaned data to local storage (never save temporary blob: URLs to photoUrl)
       if (loadedData) {
-        // Cache cleaned data to local storage
         saveStoredPage(key, {
           page: loadedData.page,
-          photoUrl: loadedData.photoUrl,
+          photoUrl: loadedData.photoUrl || null,
           audioFiles: loadedData.audioFiles,
         });
       }
@@ -313,20 +298,16 @@ export function App() {
       const data = await res.json();
       setCurrentPage(data.page);
       setCurrentKey('demo-arc');
+      setSelectedKey('demo-arc');
       setPhotoUrl(null);
-      const langParam = data.page.language?.name_en || 'French';
-      const demoAudios = data.audioFiles || {
-        'lecture_complete.mp3': `/api/tts?text=${encodeURIComponent(data.page.sentences.map((s: any) => s.tts_text || s.raw_text).join(' '))}&lang=${encodeURIComponent(langParam)}`,
-        ...Object.fromEntries(
-          data.page.sentences.map((s: any) => [
-            `${s.id}.mp3`,
-            `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`,
-          ])
-        ),
-      };
+      const demoAudios = data.audioFiles || {};
       setAudioFiles(demoAudios);
+      saveStoredPage('demo-arc', {
+        page: data.page,
+        photoUrl: null,
+        audioFiles: demoAudios,
+      });
       setInfoMessage('개선문 데모 페이지를 불러왔습니다. Gemini 고품질 원어민 음성으로 바로 학습해보세요.');
-      fetchLibraryAndLoadLatest();
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -366,15 +347,16 @@ export function App() {
       const data = await res.json();
       setCurrentPage(data.page);
       setCurrentKey(data.key);
+      setSelectedKey(data.key);
       const activePhotoUrl = data.photoUrl || URL.createObjectURL(selectedFile);
       setPhotoUrl(activePhotoUrl);
       const returnedAudioFiles = data.audioFiles || {};
       setAudioFiles(returnedAudioFiles);
 
-      // Save to localStorage so it is never lost on redeploy
+      // Save to localStorage: use persistent server photoUrl, never volatile blob: URL
       saveStoredPage(data.key, {
         page: data.page,
-        photoUrl: activePhotoUrl,
+        photoUrl: data.photoUrl || null,
         audioFiles: returnedAudioFiles,
       });
 
@@ -532,6 +514,8 @@ export function App() {
                 audioUrl={audioFiles['lecture_complete.mp3']}
                 lessonKey={currentKey}
                 pageData={currentPage}
+                sentences={currentPage.sentences || []}
+                audioFiles={audioFiles}
               />
 
               {/* Sentence Breakdown List */}
