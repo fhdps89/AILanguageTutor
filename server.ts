@@ -11,6 +11,9 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
+// Enable trust proxy for Cloud Run and reverse proxies
+app.set('trust proxy', 1);
+
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const APP_DIR = process.cwd();
 const CACHE_DIR = process.env.FRENCH_TUTOR_CACHE || path.join(APP_DIR, 'cache');
@@ -33,12 +36,22 @@ const generalLimiter = rateLimit({
   message: { error: '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+    trustProxy: false,
+  },
 });
 
 const analyzeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
   message: { error: '이미지 분석 요청 한도를 초과했습니다. 15분 후 다시 시도해주세요.' },
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+    trustProxy: false,
+  },
 });
 
 app.use(cors());
