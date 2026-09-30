@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
-import { Play, Pause, Repeat, Mic, Volume2, Bookmark } from 'lucide-react';
+import { Play, Pause, Repeat, Mic, Volume2, Bookmark, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { playSentenceAudio, playPracticeTrack, stopAllAudio } from '../utils/audio';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 
@@ -26,10 +26,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const [practiceRate, setPracticeRate] = useState<0.5 | 0.75>(0.75);
   const [activeChunk, setActiveChunk] = useState<string | null>(null);
   const [activeVocab, setActiveVocab] = useState<string | null>(null);
+  const [preparingMessage, setPreparingMessage] = useState<string | null>(null);
   const [playbackTime, setPlaybackTime] = useState<{ currentTime: number; duration: number }>({
     currentTime: 0,
     duration: 0,
   });
+
+  // U3: Accordion state for deep grammatical details to reduce mobile scroll clutter
+  const [showSyntax, setShowSyntax] = useState(false);
+  const [showVocab, setShowVocab] = useState(false);
 
   const textToSpeak = sentence.tts_text || sentence.raw_text;
   const langParam = language?.name_en || language?.code || 'en-US';
@@ -38,9 +43,10 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const isKoreanMode = (language?.code || '').startsWith('ko');
 
   const handlePlayNative = () => {
-    if (isPlayingNative) {
+    if (isPlayingNative || preparingMessage) {
       stopAllAudio();
       setIsPlayingNative(false);
+      setPreparingMessage(null);
       setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
@@ -56,23 +62,30 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: textToSpeak,
       lang: langParam,
       rate: 1.0,
-      onStart: () => setIsPlayingNative(true),
+      onPreparing: (msg) => setPreparingMessage(msg),
+      onStart: () => {
+        setPreparingMessage(null);
+        setIsPlayingNative(true);
+      },
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
       onEnd: () => {
         setIsPlayingNative(false);
+        setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
       onError: () => {
         setIsPlayingNative(false);
+        setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
     });
   };
 
   const handlePlayPractice = (rate: 0.5 | 0.75) => {
-    if (practicePhase !== 'idle' && practiceRate === rate) {
+    if ((practicePhase !== 'idle' || preparingMessage) && practiceRate === rate) {
       stopAllAudio();
       setPracticePhase('idle');
+      setPreparingMessage(null);
       setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
@@ -90,7 +103,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: textToSpeak,
       lang: langParam,
       rate,
+      onPreparing: (msg) => setPreparingMessage(msg),
       onPhaseChange: (phase) => {
+        setPreparingMessage(null);
         setPracticePhase(phase);
         if (phase === 'pause' || phase === 'idle') {
           setPlaybackTime({ currentTime: 0, duration: 0 });
@@ -99,6 +114,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
       onEnd: () => {
         setPracticePhase('idle');
+        setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
     });
@@ -123,13 +139,17 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: chunkText,
       lang: langParam,
       rate: 1.0,
+      onPreparing: (msg) => setPreparingMessage(msg),
+      onStart: () => setPreparingMessage(null),
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
       onEnd: () => {
         setActiveChunk(null);
+        setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
       onError: () => {
         setActiveChunk(null);
+        setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
     });
@@ -152,8 +172,16 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: wordText,
       lang: langParam,
       rate: 1.0,
-      onEnd: () => setActiveVocab(null),
-      onError: () => setActiveVocab(null),
+      onPreparing: (msg) => setPreparingMessage(msg),
+      onStart: () => setPreparingMessage(null),
+      onEnd: () => {
+        setActiveVocab(null);
+        setPreparingMessage(null);
+      },
+      onError: () => {
+        setActiveVocab(null);
+        setPreparingMessage(null);
+      },
     });
   };
 
@@ -200,10 +228,13 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     );
   };
 
+  const hasVocab = sentence.vocabulary && sentence.vocabulary.length > 0;
+  const hasSyntax = !!sentence.syntax_diagram && !isKoreanMode;
+
   return (
     <div
       id={`sentence-${sentence.id}`}
-      className={`rounded-xl p-5 shadow-sm border transition scroll-mt-24 ${
+      className={`rounded-xl p-4 sm:p-5 shadow-sm border transition scroll-mt-24 ${
         isBookmarked
           ? 'bg-amber-50/40 border-amber-400 ring-2 ring-amber-300/70 shadow-amber-100/50'
           : 'bg-white border-slate-200 hover:border-slate-300'
@@ -233,11 +264,6 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {pronHint && (
-            <span className="hidden sm:inline-block text-xs text-amber-800 bg-amber-50 px-2 py-0.5 rounded font-mono border border-amber-200/50">
-              {isFrench ? '연음' : '발음·강세'}: {pronHint}
-            </span>
-          )}
           {onToggleBookmark && (
             <button
               onClick={onToggleBookmark}
@@ -249,25 +275,25 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               title={isBookmarked ? '시작 지점 북마크 해제' : '내일 학습 시작 위치로 북마크'}
             >
               <Bookmark className={`h-3.5 w-3.5 ${isBookmarked ? 'fill-white text-white' : 'text-slate-400'}`} />
-              <span>{isBookmarked ? '내일의 시작점' : '여기서부터 시작'}</span>
+              <span className="text-[11px]">{isBookmarked ? '내일의 시작점' : '북마크'}</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Target Language Text */}
-      <div className="mb-4">
+      <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            {language ? `${language.flag} ${language.name_ko} (${language.name_en}):` : '원문:'}
+            {language ? `${language.flag} ${language.name_ko}:` : '원문:'}
           </span>
           {(isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2') && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
-              🎤 노래방 실시간 하이라이팅 중
+              🎤 노래방 싱크 진행 중
             </span>
           )}
         </div>
-        <p className="text-lg font-medium text-slate-900 leading-relaxed font-serif">
+        <p className="text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
           {renderKaraokeText(
             sentence.raw_text,
             isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2',
@@ -275,6 +301,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             playbackTime.duration
           )}
         </p>
+
+        {/* U1 Fix: Pronunciation / liaison hint visible on mobile as well */}
+        {pronHint && (
+          <div className="mt-2 inline-flex items-center gap-1 text-xs text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
+            <span className="font-bold text-amber-800">{isFrench ? '🗣️ 연음' : '🗣️ 발음'}:</span>
+            <span>{pronHint}</span>
+          </div>
+        )}
+
         {isKoreanMode && sentence.sound_romanization && (
           <div className="mt-2 text-xs sm:text-sm text-slate-500 font-mono tracking-wide">
             🗣️ <span className="italic text-slate-600">{sentence.sound_romanization}</span>
@@ -283,60 +318,70 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       </div>
 
       {/* Audio Controls */}
-      <div className="mb-4 flex flex-wrap items-center gap-2.5 bg-slate-50 p-3 rounded-lg border border-slate-100">
-        {/* Native 1.0x button */}
-        <button
-          onClick={handlePlayNative}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-            isPlayingNative
-              ? 'bg-amber-600 text-white hover:bg-amber-700'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-          }`}
-          title="원어민 일반 속도(1.0x)로 문장 전체 청취"
-        >
-          {isPlayingNative ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-          원어민 1.0x
-        </button>
+      <div className="mb-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Native 1.0x button */}
+          <button
+            onClick={handlePlayNative}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+              isPlayingNative
+                ? 'bg-amber-600 text-white hover:bg-amber-700'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+            title="원어민 일반 속도(1.0x)로 문장 전체 청취"
+          >
+            {isPlayingNative ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+            원어민 1.0x
+          </button>
 
-        {/* Practice 0.75x button */}
-        <button
-          onClick={() => handlePlayPractice(0.75)}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-            practicePhase !== 'idle' && practiceRate === 0.75
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-          }`}
-          title="여유로운 원어민 학습 템포(0.75x)로 듣고 따라하기 자동 반복"
-        >
-          {practicePhase !== 'idle' && practiceRate === 0.75 ? (
-            <Pause className="h-3.5 w-3.5" />
-          ) : (
-            <Repeat className="h-3.5 w-3.5" />
-          )}
-          0.75x 쉐도잉 (여유 템포)
-        </button>
+          {/* Practice 0.75x button */}
+          <button
+            onClick={() => handlePlayPractice(0.75)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+              practicePhase !== 'idle' && practiceRate === 0.75
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+            title="여유로운 원어민 학습 템포(0.75x)로 듣고 따라하기 자동 반복"
+          >
+            {practicePhase !== 'idle' && practiceRate === 0.75 ? (
+              <Pause className="h-3.5 w-3.5" />
+            ) : (
+              <Repeat className="h-3.5 w-3.5" />
+            )}
+            0.75x 쉐도잉
+          </button>
 
-        {/* Practice 0.5x button (초보자용 느린 조음 연습) */}
-        <button
-          onClick={() => handlePlayPractice(0.5)}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-            practicePhase !== 'idle' && practiceRate === 0.5
-              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-              : 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50/70'
-          }`}
-          title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 듣고 따라하기"
-        >
-          {practicePhase !== 'idle' && practiceRate === 0.5 ? (
-            <Pause className="h-3.5 w-3.5" />
-          ) : (
-            <Repeat className="h-3.5 w-3.5" />
-          )}
-          0.5x 조음 훈련 (또박또박)
-        </button>
+          {/* Practice 0.5x button */}
+          <button
+            onClick={() => handlePlayPractice(0.5)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+              practicePhase !== 'idle' && practiceRate === 0.5
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50/70'
+            }`}
+            title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 듣고 따라하기"
+          >
+            {practicePhase !== 'idle' && practiceRate === 0.5 ? (
+              <Pause className="h-3.5 w-3.5" />
+            ) : (
+              <Repeat className="h-3.5 w-3.5" />
+            )}
+            0.5x 조음 훈련
+          </button>
+        </div>
+
+        {/* Humorous and engaging dynamic voice preparing indicator */}
+        {preparingMessage && (
+          <div className="mt-2.5 flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-100/80 px-3 py-1.5 rounded-md border border-amber-300 animate-pulse">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 shrink-0" />
+            <span className="font-semibold">{preparingMessage}</span>
+          </div>
+        )}
 
         {/* Practice phase indicator badge */}
         {practicePhase !== 'idle' && (
-          <div className="flex items-center gap-1.5 text-xs font-medium w-full sm:w-auto mt-1 sm:mt-0">
+          <div className="flex items-center gap-1.5 text-xs font-medium w-full sm:w-auto mt-2.5">
             {practicePhase === 'playing1' && (
               <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full animate-pulse border border-indigo-200/60">
                 <Volume2 className="h-3 w-3" />
@@ -346,7 +391,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             {practicePhase === 'pause' && (
               <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 animate-bounce">
                 <Mic className="h-3.5 w-3.5 text-emerald-600" />
-                지금 따라 말해보세요! (마이크 턴)
+                지금 소리 내어 따라 읽어보세요!
               </span>
             )}
             {practicePhase === 'playing2' && (
@@ -359,49 +404,46 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         )}
       </div>
 
-      {/* Translation */}
-      <div className="mb-4">
+      {/* Translation (Default Visible for beginner target learners) */}
+      <div className="mb-3 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-          {isKoreanMode ? '영어 번역 (English Translation):' : '한국어 번역:'}
+          {isKoreanMode ? '영어 번역 (Translation):' : '한국어 번역:'}
         </span>
-        <p className="text-sm text-slate-700 leading-normal">
+        <p className="text-sm text-slate-800 leading-normal font-sans">
           {sentence.translation}
         </p>
       </div>
 
       {/* Korean Morphological Chunks or Standard Breath Marks */}
       {isKoreanMode && sentence.korean_chunks && sentence.korean_chunks.length > 0 ? (
-        <div className="mb-4 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+        <div className="mb-3 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
+          <div className="flex items-center justify-between gap-1 mb-2">
             <span className="text-[11px] font-bold text-slate-600">
-              조사·어미 및 형태소 청크 (Grammar & Chunks):
-            </span>
-            <span className="text-[11px] text-indigo-600 font-medium">
-              💡 청크를 터치하면 1.0x 발음이 재생됩니다
+              조사·어미 청크 (터치하여 발음 듣기):
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 leading-relaxed">
+          <div className="flex flex-wrap items-center gap-1.5 leading-relaxed">
             {sentence.korean_chunks.map((chk, idx) => {
               const isPlayingThis = activeChunk === chk.text;
               return (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-md p-1 px-2.5 shadow-2xs hover:border-indigo-300 transition"
+                  className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md p-1 px-2 shadow-2xs hover:border-indigo-300 transition"
                 >
                   <button
                     type="button"
                     onClick={() => handlePlayChunk(chk.text)}
-                    className={`inline-flex items-center gap-1 text-xs sm:text-sm font-serif font-medium transition cursor-pointer ${
+                    className={`inline-flex items-center gap-1 text-xs font-serif font-medium transition cursor-pointer ${
                       isPlayingThis ? 'text-indigo-600 font-bold' : 'text-slate-900 hover:text-indigo-600'
                     }`}
                     title={`"${chk.text}" 1.0x 발음 듣기`}
                   >
-                    <Volume2 className={`h-3.5 w-3.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-slate-400'}`} />
+                    <Volume2 className={`h-3 w-3 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-slate-400'}`} />
                     <span>{chk.text}</span>
                   </button>
                   {chk.grammarRole && (
-                    <span className="text-[10px] font-mono font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                    <span className="text-[10px] font-mono font-medium text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100">
                       {chk.grammarRole}
                     </span>
                   )}
@@ -411,17 +453,14 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           </div>
         </div>
       ) : sentence.breath_marks && sentence.breath_marks !== sentence.raw_text ? (
-        <div className="mb-4 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+        <div className="mb-3 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
+          <div className="flex items-center justify-between gap-1 mb-1.5">
             <span className="text-[11px] font-bold text-slate-600">
-              끊어 읽기 (호흡 단위 / ):
-            </span>
-            <span className="text-[11px] text-indigo-600 font-medium">
-              💡 구문을 터치하면 1.0x 원어민 음성이 재생됩니다
+              호흡 단위 끊어 읽기 (/ 터치하여 부분 청취):
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 leading-relaxed">
+          <div className="flex flex-wrap items-center gap-1 leading-relaxed">
             {sentence.breath_marks.split('/').map((rawChunk, idx, arr) => {
               const chunk = rawChunk.trim();
               if (!chunk) return null;
@@ -431,18 +470,18 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                   <button
                     type="button"
                     onClick={() => handlePlayChunk(chunk)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs sm:text-sm font-serif transition cursor-pointer text-left ${
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-serif transition cursor-pointer text-left ${
                       isPlayingThis
-                        ? 'bg-indigo-600 text-white font-semibold shadow-xs ring-2 ring-indigo-300 animate-pulse'
-                        : 'bg-white border border-indigo-200/80 text-indigo-950 font-medium hover:bg-indigo-50 hover:border-indigo-400 shadow-2xs'
+                        ? 'bg-indigo-600 text-white font-semibold shadow-xs ring-1 ring-indigo-300'
+                        : 'bg-white border border-indigo-200/70 text-indigo-950 font-medium hover:bg-indigo-50'
                     }`}
-                    title={`"${chunk}" 1.0x 원어민 음성 듣기`}
+                    title={`"${chunk}" 부분 음성 듣기`}
                   >
-                    <Volume2 className={`h-3.5 w-3.5 shrink-0 ${isPlayingThis ? 'text-white' : 'text-indigo-500'}`} />
+                    <Volume2 className={`h-3 w-3 shrink-0 ${isPlayingThis ? 'text-white' : 'text-indigo-500'}`} />
                     <span>{chunk}</span>
                   </button>
                   {idx < arr.length - 1 && (
-                    <span className="text-slate-300 font-bold px-1 select-none text-base">/</span>
+                    <span className="text-slate-300 font-bold px-0.5 select-none text-sm">/</span>
                   )}
                 </React.Fragment>
               );
@@ -451,9 +490,34 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
       ) : null}
 
-      {/* Syntax diagram */}
-      {sentence.syntax_diagram && !isKoreanMode && (
-        <div className="mb-4">
+      {/* U3 Accordion Controls: Toggle buttons for Syntax diagram and Vocabulary */}
+      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+        {hasSyntax && (
+          <button
+            type="button"
+            onClick={() => setShowSyntax(!showSyntax)}
+            className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50/50 px-2.5 py-1 rounded border border-slate-200 transition cursor-pointer"
+          >
+            <span>📐 구문 분석도</span>
+            {showSyntax ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        )}
+
+        {hasVocab && (
+          <button
+            type="button"
+            onClick={() => setShowVocab(!showVocab)}
+            className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50/50 px-2.5 py-1 rounded border border-slate-200 transition cursor-pointer"
+          >
+            <span>📚 핵심 어휘 ({sentence.vocabulary.length}개)</span>
+            {showVocab ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        )}
+      </div>
+
+      {/* Collapsible Syntax Diagram */}
+      {showSyntax && sentence.syntax_diagram && !isKoreanMode && (
+        <div className="mt-3">
           <span className="text-[11px] font-bold text-slate-500 block mb-1">
             구문 분해 (문장 구조도):
           </span>
@@ -463,15 +527,12 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
       )}
 
-      {/* Vocabulary */}
-      {sentence.vocabulary && sentence.vocabulary.length > 0 && (
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+      {/* Collapsible Vocabulary */}
+      {showVocab && hasVocab && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-1 mb-2">
             <span className="text-[11px] font-bold text-slate-600">
-              {isKoreanMode ? '핵심 어휘 (Vocabulary & Base Form):' : '핵심 어휘:'}
-            </span>
-            <span className="text-[11px] text-indigo-600 font-medium">
-              💡 단어를 터치하면 1.0x 발음을 들을 수 있습니다
+              {isKoreanMode ? '핵심 어휘 (터치하여 발음 청취):' : '핵심 어휘:'}
             </span>
           </div>
 
@@ -485,10 +546,10 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                   onClick={() => handlePlayVocab(v.word)}
                   className={`flex items-start justify-between rounded-md p-2 text-xs border text-left transition cursor-pointer ${
                     isPlayingThis
-                      ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-200'
+                      ? 'bg-indigo-50 border-indigo-400 ring-1 ring-indigo-200'
                       : 'bg-slate-50 border-slate-200 hover:bg-indigo-50/50 hover:border-indigo-300'
                   }`}
-                  title={`"${v.word}" 1.0x 발음 듣기`}
+                  title={`"${v.word}" 발음 듣기`}
                 >
                   <div className="flex items-start gap-1.5">
                     <Volume2 className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-indigo-400'}`} />
@@ -498,7 +559,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                           {v.word}
                         </span>
                         {v.baseForm && v.baseForm !== v.word && (
-                          <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-mono">
+                          <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100 font-mono">
                             원형: {v.baseForm}
                           </span>
                         )}

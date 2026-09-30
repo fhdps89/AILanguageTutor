@@ -3,8 +3,8 @@ dist/
 .env
 .env.local
 .DS_Store
-cache/tts/
-cache/*/page.jpg
-cache/*/page.png
+cache/*
+!cache/demo-arc
+!cache/demo-arc/**
+!cache/library.json
 firebase-applet-config.json
-

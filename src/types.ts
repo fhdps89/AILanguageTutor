@@ -56,13 +56,7 @@ export interface LibraryItem {
   n_sentences: number;
   saved_at: string;
   language?: LanguageInfo;
-}
-
-export interface ProviderOption {
-  id: string;
-  name: string;
-  model: string;
-  available: boolean;
+  ownerId?: string;
 }
 
 export interface SystemStatus {
@@ -71,9 +65,6 @@ export interface SystemStatus {
   currentModel: string;
   build: string;
   hasGemini: boolean;
-  hasOpenRouter: boolean;
-  hasXAI: boolean;
-  availableProviders: ProviderOption[];
 }
 
 export interface StudyBookmark {

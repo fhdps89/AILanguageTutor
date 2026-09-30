@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -11,7 +11,6 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
-// Enable trust proxy for Cloud Run and reverse proxies
 app.set('trust proxy', 1);
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -20,8 +19,9 @@ const CACHE_DIR = process.env.FRENCH_TUTOR_CACHE || path.join(APP_DIR, 'cache');
 const DEMO_JSON_PATH = path.join(APP_DIR, 'demo_page.json');
 const LIBRARY_PATH = path.join(CACHE_DIR, 'library.json');
 const TTS_CACHE_DIR = path.join(CACHE_DIR, 'tts');
-const BUILD_VERSION = '20260928-multilingual-v7';
+const BUILD_VERSION = '20260930-gemini-single';
 
+// Ensure required directories exist
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
@@ -32,7 +32,7 @@ if (!fs.existsSync(TTS_CACHE_DIR)) {
 // Security: Rate limiting
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 600,
   message: { error: '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -61,8 +61,71 @@ app.use('/api/', generalLimiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
 });
+
+// Cache API key lookup at startup
+let cachedGeminiApiKey: string | undefined = undefined;
+
+function getCachedGeminiApiKey(): string | undefined {
+  if (cachedGeminiApiKey) return cachedGeminiApiKey;
+
+  const directCandidates = [
+    process.env.GOOGLE_API_KEY,
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_GENAI_API_KEY,
+    process.env.API_KEY,
+  ];
+
+  for (const c of directCandidates) {
+    if (c && typeof c === 'string') {
+      const trimmed = c.trim();
+      if ((trimmed.startsWith('AIza') || trimmed.startsWith('AQ.')) && trimmed.length > 25) {
+        cachedGeminiApiKey = trimmed;
+        return cachedGeminiApiKey;
+      }
+    }
+  }
+
+  for (const rawVal of Object.values(process.env)) {
+    if (typeof rawVal === 'string') {
+      const trimmed = rawVal.trim();
+      if ((trimmed.startsWith('AIza') || trimmed.startsWith('AQ.')) && trimmed.length > 25) {
+        cachedGeminiApiKey = trimmed;
+        return cachedGeminiApiKey;
+      }
+    }
+  }
+
+  if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.startsWith('MY_')) {
+    cachedGeminiApiKey = process.env.GOOGLE_API_KEY.trim();
+    return cachedGeminiApiKey;
+  }
+  if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('MY_')) {
+    cachedGeminiApiKey = process.env.GEMINI_API_KEY.trim();
+    return cachedGeminiApiKey;
+  }
+
+  return undefined;
+}
+
+// Singleton GoogleGenAI Client
+let genAIInstance: GoogleGenAI | null = null;
+function getGenAIClient(): GoogleGenAI | null {
+  const key = getCachedGeminiApiKey();
+  if (!key) return null;
+  if (!genAIInstance) {
+    genAIInstance = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return genAIInstance;
+}
 
 const SYSTEM_PROMPT = `You are an expert OCR and Multilingual Language-Learning Annotator.
 Analyze the uploaded document or book page photo, automatically detect its source language, and transcribe it verbatim into structured learning content.
@@ -77,24 +140,9 @@ CRITICAL RULES:
      * "translation": Natural and accurate English translation.
      * "sound_romanization": Exact spoken phonetic romanization (ONE single representation reflecting actual assimilation/liaison, e.g. "gieop-ui seongjang-eun haruachim-e irueojiji anki ttaemun-ida"). Never show dual romanization. For already-English words like "FOMO" or loanwords like "인베스팅" (investing), keep them clean and natural.
      * "korean_chunks": Array of meaningful grammatical chunks with particle/inflection breakdown.
-       Example:
-       [
-         { "text": "기업의", "grammarRole": "possessive 의" },
-         { "text": "성장은", "grammarRole": "topic 은" },
-         { "text": "하루아침에", "grammarRole": "" },
-         { "text": "이루어지지 않기", "grammarRole": "이루어지다 + 지 않 + 기" },
-         { "text": "때문이다", "grammarRole": "때문 + 이다" }
-       ]
-     * "formality_badge": ONLY tag if there is a distinct sentence-ending speech level:
-       - "Formal (하십시오체)" (e.g. -ㅂ니다/-습니까)
-       - "Polite (해요체)" (e.g. -아요/-어요)
-       - "Casual (반말)" (e.g. -아/-어)
-       - Written descriptive/declarative endings (-다, -이다, -ㄴ다) are neutral written style: MUST return null.
-     * "vocabulary": Array of { "word", "meaning" (English), "baseForm" (dictionary base form of verb/adj), "pos" (e.g. Noun, Verb, Adjective), "hint" }.
-     * STRICT OPTICAL & HALLUCINATION DEFENSE:
-       a) GHOSTING DEFENSE: Completely ignore faint bleed-through text from the reverse side of the paper.
-       b) ASTERISKS & FOOTNOTES: Strip footnote asterisks from words (e.g. transcribe "FOMO*" as "FOMO"). Do not include footnotes as body sentences.
-       c) TRUNCATED BOTTOM LINE: If the last sentence is cut off at the bottom margin (e.g. ending at "...지불해야 하는 비용인"), transcribe ONLY the visible printed characters and close the sentence with an ellipsis. NEVER hallucinate or invent continuation.
+     * "formality_badge": ONLY tag if there is a distinct sentence-ending speech level ("Formal (하십시오체)", "Polite (해요체)", "Casual (반말)"). Neutral written descriptive endings (-다, -이다, -ㄴ다) MUST return null.
+     * "vocabulary": Array of { "word", "meaning" (English), "baseForm", "pos", "hint" }.
+     * STRICT OPTICAL DEFENSE: Ignore faint bleed-through text from reverse side; strip footnote asterisks; if the last sentence is cut off, transcribe only visible text with ellipsis.
 
 3. CASE B: FOREIGN SOURCE TEXT (Learning Foreign language for Korean learners):
    - If the source is French, English, Japanese, German, Spanish, etc.:
@@ -106,13 +154,13 @@ CRITICAL RULES:
 
 4. STRUCTURE:
    - First sentence id MUST be "s00" (title/headline if present; if no distinct header, start directly with "s01").
-   - Spoken expansions (e.g. numbers, abbreviations) belong in "tts_text" and "full_tts_script".
+   - Spoken expansions belong in "tts_text" and "full_tts_script".
    - Return ONLY a valid JSON object matching the schema below. No markdown fences.
 
 Schema:
 {
   "language": {
-    "code": "BCP-47 or ISO code (e.g. 'ko', 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE', 'zh-CN')",
+    "code": "BCP-47 code (e.g. 'ko', 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE', 'zh-CN')",
     "name_ko": "Language name in Korean (e.g. '한국어', '영어', '프랑스어', '일본어')",
     "name_en": "Language name in English (e.g. 'Korean', 'English', 'French', 'Japanese')",
     "flag": "Flag emoji (e.g. '🇰🇷', '🇺🇸', '🇫🇷', '🇯🇵')"
@@ -141,91 +189,22 @@ Schema:
   ]
 }`;
 
-function inferLanguageFromText(text: string): { code: string; name_ko: string; name_en: string; flag: string } {
-  // Korean Hangul syllables check
-  const hangulMatches = text.match(/[\uac00-\ud7a3]/g);
-  if (hangulMatches && hangulMatches.length >= 10) {
-    return { code: 'ko', name_ko: '한국어', name_en: 'Korean', flag: '🇰🇷' };
+// Extract requester owner/device ID for library privacy and future Google SSO migration bridge
+function getOwnerId(req: Request): string {
+  const headerId = req.headers['x-device-id'];
+  if (typeof headerId === 'string' && headerId.trim()) {
+    return headerId.trim();
   }
-  if (/[\u3040-\u30ff]/.test(text)) {
-    return { code: 'ja-JP', name_ko: '일본어', name_en: 'Japanese', flag: '🇯🇵' };
+  const queryId = req.query.deviceId;
+  if (typeof queryId === 'string' && queryId.trim()) {
+    return queryId.trim();
   }
-  if (/[\u4e00-\u9fff]/.test(text)) {
-    return { code: 'zh-CN', name_ko: '중국어', name_en: 'Chinese', flag: '🇨🇳' };
-  }
-  if (/[éèêëàâçîïôûùœæÉÈÊËÀÂÇÎÏÔÛÙŒÆ]/.test(text) || /\b(le|la|les|des|un|une|est|sont|dans|pour|avec)\b/i.test(text)) {
-    return { code: 'fr-FR', name_ko: '프랑스어', name_en: 'French', flag: '🇫🇷' };
-  }
-  if (/[äöüßÄÖÜ]/.test(text) || /\b(der|die|das|und|ist|nicht|ein|eine)\b/i.test(text)) {
-    return { code: 'de-DE', name_ko: '독일어', name_en: 'German', flag: '🇩🇪' };
-  }
-  if (/[ñáéíóúü¡¿ÑÁÉÍÓÚÜ]/.test(text) || /\b(el|la|los|las|por|para|con|como)\b/i.test(text)) {
-    return { code: 'es-ES', name_ko: '스페인어', name_en: 'Spanish', flag: '🇪🇸' };
-  }
-  if (hangulMatches && hangulMatches.length > 0) {
-    return { code: 'ko', name_ko: '한국어', name_en: 'Korean', flag: '🇰🇷' };
-  }
-  return { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' };
+  return 'anonymous';
 }
 
-function findGeminiApiKey(): string | undefined {
-  // Real Google / Gemini API keys start with 'AIza' or 'AQ.' and have length > 25
-  const directCandidates = [
-    process.env.GOOGLE_API_KEY,
-    process.env.GEMINI_API_KEY,
-    process.env.GOOGLE_GENAI_API_KEY,
-    process.env.API_KEY,
-  ];
-
-  for (const c of directCandidates) {
-    if (c && typeof c === 'string') {
-      const trimmed = c.trim();
-      if ((trimmed.startsWith('AIza') || trimmed.startsWith('AQ.')) && trimmed.length > 25) {
-        return trimmed;
-      }
-    }
-  }
-
-  // Scan all env vars for authentic keys starting with AIza or AQ.
-  for (const rawVal of Object.values(process.env)) {
-    if (typeof rawVal === 'string') {
-      const trimmed = rawVal.trim();
-      if ((trimmed.startsWith('AIza') || trimmed.startsWith('AQ.')) && trimmed.length > 25) {
-        return trimmed;
-      }
-    }
-  }
-
-  // Fallback to direct keys if not placeholder
-  if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_API_KEY.startsWith('MY_')) return process.env.GOOGLE_API_KEY.trim();
-  if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('MY_')) return process.env.GEMINI_API_KEY.trim();
-  return undefined;
-}
-
-function getActiveEngine(): string {
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  const geminiKey = findGeminiApiKey();
-  const xaiKey = process.env.XAI_API_KEY;
-  const visionProvider = (process.env.VISION_PROVIDER || (geminiKey ? 'gemini' : openRouterKey ? 'openrouter' : 'gemini')).toLowerCase();
-
-  if (visionProvider === 'gemini' && geminiKey) {
-    return 'Google Gemini Vision (' + (process.env.VISION_MODEL || 'gemini-3.8-flash') + ')';
-  } else if (visionProvider === 'openrouter' && openRouterKey) {
-    return 'OpenRouter ' + (process.env.OPENROUTER_MODEL || 'z-ai/glm-5.3-flash');
-  } else if (visionProvider === 'xai' && xaiKey) {
-    return 'xAI Grok ' + (process.env.XAI_VISION_MODEL || 'grok-2-vision-1212');
-  } else if (geminiKey) {
-    return 'Google Gemini Vision (' + (process.env.VISION_MODEL || 'gemini-3.8-flash') + ')';
-  }
-  return '미설정 (데모 가능)';
-}
-
-function loadLibrary(): any[] {
-  if (!fs.existsSync(LIBRARY_PATH)) {
-    return [];
-  }
+async function loadLibraryAsync(): Promise<any[]> {
   try {
-    const raw = fs.readFileSync(LIBRARY_PATH, 'utf-8');
+    const raw = await fs.promises.readFile(LIBRARY_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -233,8 +212,12 @@ function loadLibrary(): any[] {
   }
 }
 
-function saveLibrary(items: any[]) {
-  fs.writeFileSync(LIBRARY_PATH, JSON.stringify(items, null, 2), 'utf-8');
+async function saveLibraryAsync(items: any[]) {
+  try {
+    await fs.promises.writeFile(LIBRARY_PATH, JSON.stringify(items, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to save library.json:', err);
+  }
 }
 
 function normalizePage(data: any): any {
@@ -249,104 +232,56 @@ function normalizePage(data: any): any {
   else if (Array.isArray(data.paragraphs)) sentences = data.paragraphs;
   else if (Array.isArray(data.page?.sentences)) sentences = data.page.sentences;
 
-  const cleaned = sentences.map((sent, i) => {
-    if (typeof sent === 'string') sent = { raw_text: sent };
-    const raw = sent.raw_text || sent.text || sent.original || sent.fr || sent.french || sent.en || sent.english || '';
-    const sid = sent.id || `s${String(i).padStart(2, '0')}`;
-    const tts = sent.tts_text || sent.spoken || raw;
-    const trans = sent.translation || sent.ko || sent.meaning || '';
-    const vocab = Array.isArray(sent.vocabulary)
-      ? sent.vocabulary.map((v: any) =>
-          typeof v === 'string'
-            ? { word: v, meaning: '', hint: '', baseForm: v, pos: '' }
-            : {
-                word: String(v.word || ''),
-                meaning: String(v.meaning || ''),
-                hint: String(v.hint || ''),
-                baseForm: v.baseForm ? String(v.baseForm) : undefined,
-                pos: v.pos ? String(v.pos) : undefined,
-              }
-        )
-      : [{ word: raw.split(' ')[0] || '단어', meaning: '핵심 어휘', hint: '' }];
+  const cleaned = sentences.map((s: any, idx: number) => {
+    const raw = String(s.raw_text || s.text || s.sentence || s.french || s.korean || s.content || '').trim();
+    const tts = String(s.tts_text || s.spoken || raw).trim();
+    const trans = String(s.translation || s.meaning || s.korean_translation || s.english_translation || '').trim();
+    const breath = String(s.breath_marks || s.chunks || s.phrasing || raw).trim();
+    const syntax = String(s.syntax_diagram || s.structure || '').trim();
+    const pron = String(s.pronunciation_hint || s.phonetics || s.sound_tips || '').trim();
+    const liaison = String(s.liaison_hint || s.liaison || '').trim();
+    const roman = s.sound_romanization ? String(s.sound_romanization).trim() : undefined;
+    const formality = s.formality_badge ? String(s.formality_badge).trim() : null;
 
-    const pronHint = String(sent.pronunciation_hint || sent.liaison_hint || '').trim();
-    const rawSoundRom = String(sent.sound_romanization || sent.romanization || '').trim();
-    let koreanChunks: any[] = [];
-    if (Array.isArray(sent.korean_chunks)) {
-      koreanChunks = sent.korean_chunks.map((chk: any) => ({
-        text: String(chk.text || chk.kr || chk || '').trim(),
-        grammarRole: String(chk.grammarRole || chk.role || chk.en || '').trim(),
-      })).filter((c: any) => c.text.length > 0);
+    let chunks: any[] = [];
+    if (Array.isArray(s.korean_chunks)) {
+      chunks = s.korean_chunks.map((chk: any) => ({
+        text: String(chk.text || '').trim(),
+        grammarRole: chk.grammarRole ? String(chk.grammarRole).trim() : '',
+      })).filter((c: any) => c.text);
     }
-    const formalityBadge = sent.formality_badge ? String(sent.formality_badge).trim() : null;
+
+    let vocab: any[] = [];
+    if (Array.isArray(s.vocabulary)) {
+      vocab = s.vocabulary.map((v: any) => ({
+        word: String(v.word || '').trim(),
+        meaning: String(v.meaning || v.translation || '').trim(),
+        baseForm: v.baseForm ? String(v.baseForm).trim() : undefined,
+        pos: v.pos ? String(v.pos).trim() : undefined,
+        hint: v.hint ? String(v.hint).trim() : undefined,
+      })).filter((v: any) => v.word);
+    }
 
     return {
-      id: String(sid),
-      raw_text: String(raw).trim(),
-      tts_text: String(tts || raw).trim(),
-      translation: String(trans).trim(),
-      sound_romanization: rawSoundRom || undefined,
-      korean_chunks: koreanChunks.length > 0 ? koreanChunks : undefined,
-      formality_badge: formalityBadge,
-      breath_marks: String(sent.breath_marks || raw).trim(),
-      syntax_diagram: String(sent.syntax_diagram || raw).trim(),
-      pronunciation_hint: pronHint,
-      liaison_hint: pronHint,
+      id: s.id || `s${String(idx + 1).padStart(2, '0')}`,
+      raw_text: raw,
+      tts_text: tts,
+      translation: trans,
+      sound_romanization: roman,
+      korean_chunks: chunks.length > 0 ? chunks : undefined,
+      formality_badge: formality,
+      breath_marks: breath,
+      syntax_diagram: syntax,
+      pronunciation_hint: pron,
+      liaison_hint: liaison,
       vocabulary: vocab,
     };
-  }).filter(s => s.raw_text.length > 0);
-
-  let title = String(data.title || '').trim();
-  if (!title && cleaned.length > 0) {
-    title = cleaned[0].raw_text.slice(0, 80);
-  }
-
-  const hasS00 = cleaned.some(s => s.id === 's00');
-  if (!hasS00 && title) {
-    cleaned.unshift({
-      id: 's00',
-      raw_text: title,
-      tts_text: title,
-      translation: '제목 / 헤드라인',
-      sound_romanization: undefined,
-      korean_chunks: undefined,
-      formality_badge: null,
-      breath_marks: title,
-      syntax_diagram: `[제목] ${title}`,
-      pronunciation_hint: '',
-      liaison_hint: '',
-      vocabulary: [{ word: title.split(' ')[0] || title, meaning: '제목', hint: '' }],
-    });
-  }
-
-  // Detect and resolve language info: Vision output takes priority; regex heuristic is fallback
-  const combinedText = cleaned.map(s => s.raw_text).join(' ');
-  const rawLang = data.language && typeof data.language === 'object' ? data.language : {};
-  let language = { code: '', name_ko: '', name_en: '', flag: '' };
-
-  if (rawLang.code && rawLang.name_ko) {
-    language = {
-      code: String(rawLang.code),
-      name_ko: String(rawLang.name_ko),
-      name_en: String(rawLang.name_en || rawLang.code),
-      flag: String(rawLang.flag || '🌐'),
-    };
-  } else {
-    const fallbackLang = inferLanguageFromText(combinedText);
-    language = {
-      code: String(rawLang.code || fallbackLang.code),
-      name_ko: String(rawLang.name_ko || fallbackLang.name_ko),
-      name_en: String(rawLang.name_en || fallbackLang.name_en),
-      flag: String(rawLang.flag || fallbackLang.flag),
-    };
-  }
-
-  const fullTts = String(data.full_tts_script || cleaned.map(s => s.tts_text || s.raw_text).join(' ')).trim();
+  }).filter((s: any) => s.raw_text.length > 0);
 
   return {
-    language,
-    title,
-    full_tts_script: fullTts,
+    language: data.language || { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' },
+    title: data.title || '학습 교재',
+    full_tts_script: data.full_tts_script || cleaned.map((s: any) => s.tts_text || s.raw_text).join(' '),
     disclaimer_ko: data.disclaimer_ko || '음성은 합성 TTS이며 원어민이 아닙니다. 발음 표기는 학습용 보조 힌트입니다.',
     sentences: cleaned,
   };
@@ -367,17 +302,14 @@ function extractJson(text: string): any {
   return normalizePage(parsed);
 }
 
-let lastTtsError = '';
-
 // In-Flight TTS Deduplication Map
 const inFlightTts = new Map<string, Promise<{ buffer: Buffer; mimeType: string; hash: string } | null>>();
 
-// Ensure raw PCM audio from Gemini has valid RIFF WAV header for browser audio playback
-function ensureWavHeader(rawBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitDepth = 16): any {
-  if (rawBuffer.length >= 4 && rawBuffer.toString('ascii', 0, 4) === 'RIFF') {
+function ensureWavHeader(rawBuffer: any, sampleRate = 24000, numChannels = 1, bitDepth = 16): any {
+  if (rawBuffer && rawBuffer.length >= 4 && rawBuffer.toString('ascii', 0, 4) === 'RIFF') {
     return rawBuffer;
   }
-  const dataSize = rawBuffer.length;
+  const dataSize = rawBuffer ? rawBuffer.length : 0;
   const header = Buffer.alloc(44);
   const blockAlign = (numChannels * bitDepth) / 8;
   const byteRate = sampleRate * blockAlign;
@@ -386,8 +318,8 @@ function ensureWavHeader(rawBuffer: Buffer, sampleRate = 24000, numChannels = 1,
   header.writeUInt32LE(36 + dataSize, 4);
   header.write('WAVE', 8);
   header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16); // Subchunk1Size
-  header.writeUInt16LE(1, 20);  // PCM format
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
   header.writeUInt16LE(numChannels, 22);
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(byteRate, 28);
@@ -406,56 +338,53 @@ async function generateGeminiSpeech(
   voiceName: string = 'Kore',
   speed: string = '1.0'
 ): Promise<{ buffer: Buffer; mimeType: string; hash: string } | null> {
-  const cleanText = String(text || '').trim();
+  let cleanText = String(text || '').trim();
   if (!cleanText) return null;
 
-  const normalizedSpeed = String(speed || '1.0').trim().toLowerCase();
+  // D2/Security: Cap TTS text to 1,000 characters to prevent disk abuse
+  if (cleanText.length > 1000) {
+    cleanText = cleanText.slice(0, 1000);
+  }
 
-  // Check persistent disk cache first (including speed in the hash)
+  // Security: Speed and voice validation
+  const validSpeeds = ['1.0', '0.75', '0.5'];
+  const normalizedSpeed = validSpeeds.includes(speed) ? speed : '1.0';
+  const safeVoice = voiceName === 'Kore' ? 'Kore' : 'Kore';
+
+  // Check persistent disk cache
   const hash = crypto
     .createHash('sha256')
-    .update(`${cleanText}_${langName || 'default'}_${voiceName}_${normalizedSpeed}`)
+    .update(`${cleanText}_${langName || 'default'}_${safeVoice}_${normalizedSpeed}`)
     .digest('hex');
   const cacheFile = path.join(TTS_CACHE_DIR, `${hash}.wav`);
 
-  if (fs.existsSync(cacheFile)) {
-    try {
-      const buffer = fs.readFileSync(cacheFile);
-      if (buffer.length > 200) {
-        return { buffer, mimeType: 'audio/wav', hash };
-      }
-    } catch {}
-  }
+  try {
+    const stats = await fs.promises.stat(cacheFile);
+    if (stats.size > 200) {
+      const buffer = await fs.promises.readFile(cacheFile);
+      return { buffer, mimeType: 'audio/wav', hash };
+    }
+  } catch {}
 
-  // Deduplicate in-flight concurrent requests for identical TTS text
+  // Deduplicate in-flight concurrent requests for identical TTS
   if (inFlightTts.has(hash)) {
     return inFlightTts.get(hash)!;
   }
 
-  const geminiKey = findGeminiApiKey();
-  if (!geminiKey) {
-    lastTtsError = 'Gemini API key is not available in environment';
-    console.warn(lastTtsError);
+  const ai = getGenAIClient();
+  if (!ai) {
+    console.warn('Gemini API client is not configured');
     return null;
   }
 
   const speechPromise = (async () => {
     try {
-      const ai = new GoogleGenAI({
-        apiKey: geminiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
-      });
-
       const langLabel = langName ? `native ${langName}` : 'native';
       let promptStyle = '';
 
-      if (normalizedSpeed === '0.5' || normalizedSpeed === 'slowest') {
+      if (normalizedSpeed === '0.5') {
         promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, carefully pronouncing every single phoneme in authentic ${langLabel}, with clear pauses between thought groups.`;
-      } else if (normalizedSpeed === '0.75' || normalizedSpeed === 'slow') {
+      } else if (normalizedSpeed === '0.75') {
         promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in authentic ${langLabel}.`;
       } else {
         promptStyle = `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation and proper cadence.`;
@@ -480,7 +409,7 @@ async function generateGeminiSpeech(
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: voiceName || 'Kore' },
+              prebuiltVoiceConfig: { voiceName: safeVoice },
             },
           },
         },
@@ -493,16 +422,13 @@ async function generateGeminiSpeech(
         let buffer = Buffer.from(base64Audio, 'base64');
         buffer = ensureWavHeader(buffer);
         try {
-          fs.writeFileSync(cacheFile, buffer);
+          await fs.promises.writeFile(cacheFile, buffer);
         } catch (err) {
           console.warn('Failed to cache TTS file:', err);
         }
         return { buffer, mimeType: 'audio/wav', hash };
-      } else {
-        lastTtsError = 'Candidate returned no inlineData audio';
       }
     } catch (err: any) {
-      lastTtsError = err.message || String(err);
       console.error('Gemini TTS synthesis failed:', err.message);
     } finally {
       inFlightTts.delete(hash);
@@ -514,70 +440,22 @@ async function generateGeminiSpeech(
   return speechPromise;
 }
 
-// API Routes
+// ----------------- API Endpoints -----------------
+
 app.get('/api/status', (_req: Request, res: Response) => {
-  const openRouterKey = !!process.env.OPENROUTER_API_KEY;
-  const geminiKey = !!findGeminiApiKey();
-  const xaiKey = !!process.env.XAI_API_KEY;
-
-  const openRouterModel = process.env.OPENROUTER_MODEL || 'z-ai/glm-5.3-flash';
-  const geminiModel = process.env.VISION_MODEL || 'gemini-3.8-flash';
-  const xaiModel = process.env.XAI_VISION_MODEL || 'grok-2-vision-1212';
-
-  const availableProviders = [];
-
-  if (geminiKey) {
-    availableProviders.push({
-      id: 'gemini',
-      name: `Google Gemini (${geminiModel})`,
-      model: geminiModel,
-      available: true,
-    });
-  }
-
-  if (openRouterKey) {
-    availableProviders.push({
-      id: 'openrouter',
-      name: `OpenRouter (${openRouterModel})`,
-      model: openRouterModel,
-      available: true,
-    });
-  }
-
-  if (xaiKey) {
-    availableProviders.push({
-      id: 'xai',
-      name: `xAI Grok (${xaiModel})`,
-      model: xaiModel,
-      available: true,
-    });
-  }
-
-  // Default selection: Prefer Gemini as top/default model unless VISION_PROVIDER overrides
-  let defaultProvider = 'gemini';
-  if (process.env.VISION_PROVIDER) {
-    defaultProvider = process.env.VISION_PROVIDER.toLowerCase();
-  } else if (geminiKey) {
-    defaultProvider = 'gemini';
-  } else if (openRouterKey) {
-    defaultProvider = 'openrouter';
-  }
-
-  const activeOption = availableProviders.find(p => p.id === defaultProvider) || availableProviders[0];
+  const geminiKey = !!getCachedGeminiApiKey();
+  const visionModel = process.env.VISION_MODEL || 'gemini-3.8-flash';
 
   res.json({
-    activeEngine: activeOption ? activeOption.name : getActiveEngine(),
-    currentProvider: activeOption ? activeOption.id : defaultProvider,
-    currentModel: activeOption ? activeOption.model : '',
+    activeEngine: geminiKey ? `Google Gemini Vision (${visionModel})` : '미설정 (데모 가능)',
+    currentProvider: 'gemini',
+    currentModel: visionModel,
     build: BUILD_VERSION,
     hasGemini: geminiKey,
-    hasOpenRouter: openRouterKey,
-    hasXAI: xaiKey,
-    availableProviders,
   });
 });
 
-app.get('/api/demo', (_req: Request, res: Response) => {
+app.get('/api/demo', async (_req: Request, res: Response) => {
   const demoPath = fs.existsSync(path.join(CACHE_DIR, 'demo-arc', 'page.json'))
     ? path.join(CACHE_DIR, 'demo-arc', 'page.json')
     : DEMO_JSON_PATH;
@@ -587,38 +465,39 @@ app.get('/api/demo', (_req: Request, res: Response) => {
   }
 
   try {
-    const raw = fs.readFileSync(demoPath, 'utf-8');
+    const raw = await fs.promises.readFile(demoPath, 'utf-8');
     const data = JSON.parse(raw);
     if (!data.language) {
       data.language = { code: 'fr-FR', name_ko: '프랑스어', name_en: 'French', flag: '🇫🇷' };
     }
 
-    const langParam = data.language?.name_en || 'French';
-    const fullText = (data.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' ');
-    const audioFiles: Record<string, string> = {
-      'lecture_complete.mp3': `/api/tts?text=${encodeURIComponent(fullText)}&lang=${encodeURIComponent(langParam)}`,
-    };
-    (data.sentences || []).forEach((s: any) => {
-      audioFiles[`${s.id}.mp3`] = `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`;
-    });
-
     res.json({
       key: 'demo-arc',
       page: data,
       photoUrl: null,
-      audioFiles,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/library', (_req: Request, res: Response) => {
-  const lib = loadLibrary();
-  res.json(lib);
+// D1(a) Bridge: Filter library by caller's ownerId to completely prevent cross-user leak
+app.get('/api/library', async (req: Request, res: Response) => {
+  const callerOwnerId = getOwnerId(req);
+  const fullLib = await loadLibraryAsync();
+
+  // Return public demo-arc + lessons owned by this specific device/user
+  const userLib = fullLib.filter((item) => {
+    if (item.key === 'demo-arc') return true;
+    if (!item.ownerId) return false; // Legacy unassigned items hidden for privacy
+    return item.ownerId === callerOwnerId;
+  });
+
+  res.json(userLib);
 });
 
-app.get('/api/lesson/:key', (req: Request, res: Response) => {
+// D1(a) Bridge: Verify ownership before returning lesson
+app.get('/api/lesson/:key', async (req: Request, res: Response) => {
   const rawKey = Array.isArray(req.params.key) ? req.params.key[0] : req.params.key;
   const safeKey = String(rawKey || '').replace(/[^a-zA-Z0-9_-]/g, '');
   const lessonFolder = path.join(CACHE_DIR, safeKey);
@@ -628,73 +507,65 @@ app.get('/api/lesson/:key', (req: Request, res: Response) => {
     return res.status(404).json({ error: 'Lesson not found' });
   }
 
+  // Security check: non-demo lessons must match owner
+  if (safeKey !== 'demo-arc') {
+    const callerOwnerId = getOwnerId(req);
+    const fullLib = await loadLibraryAsync();
+    const item = fullLib.find((l) => l.key === safeKey);
+    if (item && item.ownerId && item.ownerId !== callerOwnerId) {
+      return res.status(403).json({ error: '접근 권한이 없는 교재입니다.' });
+    }
+  }
+
   try {
-    const page = JSON.parse(fs.readFileSync(pagePath, 'utf-8'));
+    const raw = await fs.promises.readFile(pagePath, 'utf-8');
+    const page = JSON.parse(raw);
     const photoExists = fs.existsSync(path.join(lessonFolder, 'page.jpg'));
     const photoUrl = photoExists ? `/api/photo/${safeKey}` : null;
-
-    // Check available audio files or provide Gemini TTS endpoints
-    const audioFiles: Record<string, string> = {};
-    if (fs.existsSync(lessonFolder)) {
-      const files = fs.readdirSync(lessonFolder);
-      for (const f of files) {
-        if (f.endsWith('.mp3') || f.endsWith('.wav')) {
-          audioFiles[f] = `/api/audio/${safeKey}/${f}`;
-        }
-      }
-    }
-
-    const langParam = page.language?.name_en || page.language?.code || '';
-    if (!audioFiles['lecture_complete.mp3'] && !audioFiles['lecture_complete.wav']) {
-      const fullText = (page.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' ');
-      if (fullText) {
-        audioFiles['lecture_complete.mp3'] = `/api/tts?text=${encodeURIComponent(fullText)}&lang=${encodeURIComponent(langParam)}`;
-      }
-    }
-
-    (page.sentences || []).forEach((s: any) => {
-      if (!audioFiles[`${s.id}.mp3`] && !audioFiles[`${s.id}.wav`]) {
-        audioFiles[`${s.id}.mp3`] = `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`;
-      }
-    });
 
     res.json({
       key: safeKey,
       page,
       photoUrl,
-      audioFiles,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/lesson/:key', (req: Request, res: Response) => {
+// D1(a) Bridge & #2 Security: Prevent unauthorized deletion
+app.delete('/api/lesson/:key', async (req: Request, res: Response) => {
   const rawKey = Array.isArray(req.params.key) ? req.params.key[0] : req.params.key;
   const safeKey = String(rawKey || '').replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeKey) {
     return res.status(400).json({ error: '유효하지 않은 키입니다.' });
   }
 
-  // Hardcoded defense: Prevent deletion of default demo lesson
   if (safeKey === 'demo-arc') {
     return res.status(403).json({ error: '기본 데모 교재(demo-arc)는 삭제할 수 없습니다.' });
+  }
+
+  const callerOwnerId = getOwnerId(req);
+  const currentLib = await loadLibraryAsync();
+  const targetItem = currentLib.find((item: any) => item.key === safeKey);
+
+  // Enforce ownership: only the creator can delete their lesson
+  if (targetItem && targetItem.ownerId && targetItem.ownerId !== callerOwnerId) {
+    return res.status(403).json({ error: '본인이 등록한 교재만 삭제할 수 있습니다.' });
   }
 
   // Delete cached directory if it exists
   const lessonFolder = path.join(CACHE_DIR, safeKey);
   if (fs.existsSync(lessonFolder)) {
     try {
-      fs.rmSync(lessonFolder, { recursive: true, force: true });
+      await fs.promises.rm(lessonFolder, { recursive: true, force: true });
     } catch (e) {
       console.warn('Failed to delete lesson folder from disk', e);
     }
   }
 
-  // Remove from library.json
-  const currentLib = loadLibrary();
   const updatedLib = currentLib.filter((item: any) => item.key !== safeKey);
-  saveLibrary(updatedLib);
+  await saveLibraryAsync(updatedLib);
 
   res.json({ success: true, key: safeKey, remaining: updatedLib.length });
 });
@@ -712,50 +583,8 @@ app.get('/api/photo/:key', (req: Request, res: Response) => {
   fs.createReadStream(photoPath).pipe(res);
 });
 
-app.get('/api/audio/:key/:file', (req: Request, res: Response) => {
-  const rawKey = Array.isArray(req.params.key) ? req.params.key[0] : req.params.key;
-  const rawFile = Array.isArray(req.params.file) ? req.params.file[0] : req.params.file;
-  const safeKey = String(rawKey || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  const safeFile = String(rawFile || '').replace(/[^a-zA-Z0-9_.-]/g, '');
-  const filePath = path.join(CACHE_DIR, safeKey, safeFile);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'Audio file not found' });
-  }
-
-  const stat = fs.statSync(filePath);
-  const total = stat.size;
-  const range = req.headers.range;
-  const ext = path.extname(safeFile).toLowerCase();
-  const contentType = ext === '.wav' ? 'audio/wav' : 'audio/mpeg';
-
-  if (range) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const partialStart = parts[0];
-    const partialEnd = parts[1];
-
-    const start = parseInt(partialStart, 10);
-    const end = partialEnd ? parseInt(partialEnd, 10) : total - 1;
-    const chunkSize = end - start + 1;
-
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${total}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type': contentType,
-    });
-    fs.createReadStream(filePath, { start, end }).pipe(res);
-  } else {
-    res.writeHead(200, {
-      'Content-Length': total,
-      'Content-Type': contentType,
-    });
-    fs.createReadStream(filePath).pipe(res);
-  }
-});
-
 // Stream cached TTS audio by hash (/api/tts/:hash)
-app.get('/api/tts/:hash', (req: Request, res: Response) => {
+app.get('/api/tts/:hash', async (req: Request, res: Response) => {
   const rawHash = req.params.hash;
   const safeHash = String(rawHash || '').replace(/[^a-fA-F0-9]/g, '');
   if (!safeHash) {
@@ -763,16 +592,15 @@ app.get('/api/tts/:hash', (req: Request, res: Response) => {
   }
 
   const audioPath = path.join(TTS_CACHE_DIR, `${safeHash}.wav`);
-  if (!fs.existsSync(audioPath)) {
+  try {
+    const stat = await fs.promises.stat(audioPath);
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    fs.createReadStream(audioPath).pipe(res);
+  } catch {
     return res.status(404).json({ error: '오디오 파일을 찾을 수 없습니다.' });
   }
-
-  const stat = fs.statSync(audioPath);
-  res.setHeader('Content-Type', 'audio/wav');
-  res.setHeader('Content-Length', stat.size);
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-
-  fs.createReadStream(audioPath).pipe(res);
 });
 
 // Prepare TTS via POST (avoids 414 URI Too Long)
@@ -828,31 +656,6 @@ app.get('/api/tts', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/tts', async (req: Request, res: Response) => {
-  const rawText = String(req.body.text || '').trim();
-  const rawLang = String(req.body.lang || '').trim();
-  const rawVoice = String(req.body.voice || 'Kore').trim();
-  const rawSpeed = String(req.body.speed || req.body.rate || '1.0').trim();
-
-  if (!rawText) {
-    return res.status(400).json({ error: 'Text parameter is required' });
-  }
-
-  try {
-    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed);
-    if (!result) {
-      return res.status(500).json({ error: 'Gemini TTS generation failed' });
-    }
-
-    res.setHeader('Content-Type', result.mimeType || 'audio/wav');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(result.buffer);
-  } catch (err: any) {
-    console.error('Error in /api/tts POST:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
     let imageBuffer: Buffer | null = null;
@@ -868,6 +671,7 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
       return res.status(400).json({ error: 'No image uploaded' });
     }
 
+    const callerOwnerId = getOwnerId(req);
     const digest = crypto.createHash('sha256').update(imageBuffer).digest('hex');
     const cacheKey = digest.slice(0, 16);
     const lessonFolder = path.join(CACHE_DIR, cacheKey);
@@ -875,168 +679,78 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
 
     // 1. Check disk cache
     if (fs.existsSync(pageJsonFile)) {
-      const cachedData = JSON.parse(fs.readFileSync(pageJsonFile, 'utf-8'));
-      const langParam = cachedData.language?.name_en || cachedData.language?.code || '';
-      const audioFiles: Record<string, string> = {
-        'lecture_complete.mp3': `/api/tts?text=${encodeURIComponent((cachedData.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' '))}&lang=${encodeURIComponent(langParam)}`,
-      };
-      (cachedData.sentences || []).forEach((s: any) => {
-        audioFiles[`${s.id}.mp3`] = `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`;
-      });
+      try {
+        const cachedRaw = await fs.promises.readFile(pageJsonFile, 'utf-8');
+        const cachedData = JSON.parse(cachedRaw);
 
-      return res.json({
-        key: cacheKey,
-        page: cachedData,
-        photoUrl: `/api/photo/${cacheKey}`,
-        audioFiles,
-        reused: true,
-        message: '이미 분석한 사진입니다. 캐시를 재사용합니다.',
-      });
+        return res.json({
+          key: cacheKey,
+          page: cachedData,
+          photoUrl: `/api/photo/${cacheKey}`,
+          reused: true,
+          message: '이미 분석한 사진입니다. 캐시를 재사용합니다.',
+        });
+      } catch {}
     }
 
-    // 2. Perform OCR analysis
-    const base64Image = imageBuffer.toString('base64');
-    let pageData: any = null;
-
-    // Determine target provider: client preference > env override > openrouter (if key exists) > gemini > xai
-    let chosenProvider = (req.body.provider || '').toLowerCase();
-    if (!chosenProvider) {
-      if (process.env.VISION_PROVIDER) {
-        chosenProvider = process.env.VISION_PROVIDER.toLowerCase();
-      } else if (process.env.OPENROUTER_API_KEY) {
-        chosenProvider = 'openrouter';
-      } else if (process.env.GEMINI_API_KEY) {
-        chosenProvider = 'gemini';
-      } else if (process.env.XAI_API_KEY) {
-        chosenProvider = 'xai';
-      }
-    }
-
-    if (chosenProvider === 'openrouter' && process.env.OPENROUTER_API_KEY) {
-      const model = req.body.model || process.env.OPENROUTER_MODEL || 'z-ai/glm-5.3-flash';
-      console.log(`[OCR] Analyzing with OpenRouter model: ${model}`);
-
-      const fetchResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://github.com/fhdps89/AILanguageTutor',
-          'X-Title': 'AILanguageTutor',
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Detect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.' },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (!fetchResp.ok) {
-        const errText = await fetchResp.text();
-        throw new Error(`OpenRouter 오류 (${fetchResp.status}): ${errText.slice(0, 300)}`);
-      }
-
-      const jsonResp: any = await fetchResp.json();
-      const content = jsonResp.choices?.[0]?.message?.content || '';
-      pageData = extractJson(content);
-    } else if (chosenProvider === 'xai' && process.env.XAI_API_KEY) {
-      const model = req.body.model || process.env.XAI_VISION_MODEL || 'grok-2-vision-1212';
-      console.log(`[OCR] Analyzing with xAI Grok model: ${model}`);
-
-      const fetchResp = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.XAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Detect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.' },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (!fetchResp.ok) {
-        const errText = await fetchResp.text();
-        throw new Error(`xAI Grok 오류 (${fetchResp.status}): ${errText.slice(0, 300)}`);
-      }
-
-      const jsonResp: any = await fetchResp.json();
-      const content = jsonResp.choices?.[0]?.message?.content || '';
-      pageData = extractJson(content);
-    } else if (findGeminiApiKey()) {
-      const gKey = findGeminiApiKey()!;
-      const ai = new GoogleGenAI({ apiKey: gKey });
-      const primaryModel = req.body.model || process.env.VISION_MODEL || 'gemini-3.8-flash';
-      const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']));
-      
-      const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
-      let lastError: any = null;
-
-      for (const modelCandidate of fallbackModels) {
-        try {
-          console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate}`);
-          const response = await ai.models.generateContent({
-            model: modelCandidate,
-            contents: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: base64Image,
-                },
-              },
-            ],
-            config: {
-              responseMimeType: 'application/json',
-              temperature: 0,
-            },
-          });
-
-          const responseText = response.text || '';
-          pageData = extractJson(responseText);
-          console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
-          break; // Success!
-        } catch (err: any) {
-          console.warn(`[OCR] Model ${modelCandidate} failed/timed out:`, err.message || err);
-          lastError = err;
-        }
-      }
-
-      if (!pageData) {
-        throw new Error(`Gemini 모델 분석 실패: ${lastError?.message || '모든 Gemini 모델 응답 불가'}`);
-      }
-    } else {
+    // 2. Perform OCR analysis using Google Gemini Vision
+    const ai = getGenAIClient();
+    if (!ai) {
       return res.status(400).json({
-        error: 'Vision API 키가 설정되지 않았습니다. .env에 GEMINI_API_KEY 또는 OPENROUTER_API_KEY를 설정하거나 상단 [데모]를 이용해주세요.',
+        error: 'Gemini API 키가 설정되지 않았습니다. 상단 [데모]를 이용해주세요.',
       });
+    }
+
+    const base64Image = imageBuffer.toString('base64');
+    const primaryModel = process.env.VISION_MODEL || 'gemini-3.8-flash';
+    const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']));
+    const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
+
+    let pageData: any = null;
+    let lastError: any = null;
+
+    for (const modelCandidate of fallbackModels) {
+      try {
+        console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate}`);
+        const response = await ai.models.generateContent({
+          model: modelCandidate,
+          contents: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: base64Image,
+              },
+            },
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0,
+          },
+        });
+
+        const responseText = response.text || '';
+        pageData = extractJson(responseText);
+        console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
+        break;
+      } catch (err: any) {
+        console.warn(`[OCR] Model ${modelCandidate} failed:`, err.message || err);
+        lastError = err;
+      }
+    }
+
+    if (!pageData) {
+      throw new Error(`Gemini 모델 분석 실패: ${lastError?.message || '모든 Gemini 모델 응답 불가'}`);
     }
 
     // 3. Persist lesson
-    fs.mkdirSync(lessonFolder, { recursive: true });
-    fs.writeFileSync(pageJsonFile, JSON.stringify(pageData, null, 2), 'utf-8');
-    fs.writeFileSync(path.join(lessonFolder, 'page.jpg'), imageBuffer);
+    await fs.promises.mkdir(lessonFolder, { recursive: true });
+    await fs.promises.writeFile(pageJsonFile, JSON.stringify(pageData, null, 2), 'utf-8');
+    await fs.promises.writeFile(path.join(lessonFolder, 'page.jpg'), imageBuffer);
 
-    // 4. Update library
-    const lib = loadLibrary().filter(item => item.key !== cacheKey);
+    // 4. Update library with ownerId (bridge for user isolation & Google SSO)
+    const currentLib = await loadLibraryAsync();
+    const filteredLib = currentLib.filter(item => item.key !== cacheKey);
     const title = pageData.title || `Lesson ${cacheKey}`;
     const row = {
       key: cacheKey,
@@ -1048,36 +762,27 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
       n_sentences: pageData.sentences?.length || 0,
       saved_at: new Date().toISOString(),
       language: pageData.language,
+      ownerId: callerOwnerId,
     };
-    lib.unshift(row);
-    saveLibrary(lib.slice(0, 50));
+    filteredLib.unshift(row);
+    await saveLibraryAsync(filteredLib.slice(0, 50));
 
-    const langParam = pageData.language?.name_en || pageData.language?.code || '';
-    const audioFiles: Record<string, string> = {
-      'lecture_complete.mp3': `/api/tts?text=${encodeURIComponent((pageData.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' '))}&lang=${encodeURIComponent(langParam)}`,
-    };
-    (pageData.sentences || []).forEach((s: any) => {
-      audioFiles[`${s.id}.mp3`] = `/api/tts?text=${encodeURIComponent(s.tts_text || s.raw_text)}&lang=${encodeURIComponent(langParam)}`;
-    });
-
-    // Background warming of Gemini native TTS audio
+    // 5. Efficient background warming: only first 3 sentences 1.0x (No wasteful full-passage synthesis)
     setTimeout(async () => {
       try {
-        const fullText = (pageData.sentences || []).map((s: any) => s.tts_text || s.raw_text).join(' ');
-        if (fullText) await generateGeminiSpeech(fullText, langParam);
-        for (const s of (pageData.sentences || []).slice(0, 6)) {
-          await generateGeminiSpeech(s.tts_text || s.raw_text, langParam);
+        const langParam = pageData.language?.name_en || pageData.language?.code || '';
+        for (const s of (pageData.sentences || []).slice(0, 3)) {
+          await generateGeminiSpeech(s.tts_text || s.raw_text, langParam, 'Kore', '1.0');
         }
       } catch (e) {
         console.warn('Background TTS warming error:', e);
       }
-    }, 50);
+    }, 100);
 
     res.json({
       key: cacheKey,
       page: pageData,
       photoUrl: `/api/photo/${cacheKey}`,
-      audioFiles,
       reused: false,
     });
   } catch (err: any) {

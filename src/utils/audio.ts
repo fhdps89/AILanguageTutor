@@ -3,11 +3,27 @@
  * Supports English, French, Japanese, Spanish, German, Chinese, and other foreign languages.
  */
 
-let activeAudio: HTMLAudioElement | null = null;
+// Global reusable audio element to satisfy iOS Safari autoplay / sequential playback restrictions
+let sharedAudio: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let practiceTimer: any = null;
 let activeRafId: number | null = null;
 let currentPlayId = 0;
+
+// Client-side in-memory cache for resolved hash audio URLs
+const resolvedUrlCache = new Map<string, string>();
+
+function getSharedAudio(): HTMLAudioElement {
+  if (typeof window === 'undefined') {
+    return {} as HTMLAudioElement;
+  }
+  if (!sharedAudio) {
+    sharedAudio = new Audio();
+    // iOS Safari audio properties
+    sharedAudio.preload = 'auto';
+  }
+  return sharedAudio;
+}
 
 export function stopAllAudio() {
   currentPlayId++;
@@ -15,16 +31,20 @@ export function stopAllAudio() {
     cancelAnimationFrame(activeRafId);
     activeRafId = null;
   }
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.onplay = null;
-    activeAudio.onended = null;
-    activeAudio.onerror = null;
-    activeAudio.src = '';
-    activeAudio = null;
+  if (sharedAudio) {
+    try {
+      sharedAudio.pause();
+      sharedAudio.currentTime = 0;
+    } catch {}
+    sharedAudio.onplay = null;
+    sharedAudio.ontimeupdate = null;
+    sharedAudio.onended = null;
+    sharedAudio.onerror = null;
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
     activeUtterance = null;
   }
   if (practiceTimer) {
@@ -32,6 +52,14 @@ export function stopAllAudio() {
     practiceTimer = null;
   }
 }
+
+const PREPARING_MESSAGES = [
+  '🎙️ 원어민 성우 섭외하는 중...',
+  '📝 대본 건네고 발음 조율 중...',
+  '🔴 스튜디오에서 열심히 녹음 중...',
+  '🎧 녹음된 음성 모니터링 중...',
+  '✨ 원어민 음성 다듬는 중...',
+];
 
 /**
  * Resolves a reliable hash-based audio stream URL for Gemini Native TTS.
@@ -41,14 +69,29 @@ async function resolveAudioUrl(
   audioUrl: string | null | undefined,
   text: string,
   lang: string,
-  speed: string
+  speed: string,
+  onPreparing?: (msg: string) => void
 ): Promise<string> {
+  const cacheKey = `${text}_${lang}_${speed}`;
+  if (resolvedUrlCache.has(cacheKey)) {
+    return resolvedUrlCache.get(cacheKey)!;
+  }
+
   // If already a clean hash URL with matching speed 1.0, return directly
   if (audioUrl && /^\/api\/tts\/[a-f0-9]{64}$/.test(audioUrl) && speed === '1.0') {
+    resolvedUrlCache.set(cacheKey, audioUrl);
     return audioUrl;
   }
 
-  // Request server to prepare hash-based audio via POST (solves URL length limit & query logging)
+  // Start animated humorous status message cycle
+  let msgIdx = 0;
+  onPreparing?.(PREPARING_MESSAGES[0]);
+  const msgInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % PREPARING_MESSAGES.length;
+    onPreparing?.(PREPARING_MESSAGES[msgIdx]);
+  }, 750);
+
+  // Request server to prepare hash-based audio via POST
   try {
     const res = await fetch('/api/tts/prepare', {
       method: 'POST',
@@ -60,18 +103,24 @@ async function resolveAudioUrl(
         voice: 'Kore',
       }),
     });
+    clearInterval(msgInterval);
+
     if (res.ok) {
       const data = await res.json();
       if (data.audioUrl) {
+        resolvedUrlCache.set(cacheKey, data.audioUrl);
         return data.audioUrl;
       }
     }
   } catch (e) {
+    clearInterval(msgInterval);
     console.warn('Failed to prepare hash audio, falling back to query route', e);
   }
 
+  clearInterval(msgInterval);
   // Fallback to GET endpoint
-  return `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}`;
+  const fallbackUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}`;
+  return fallbackUrl;
 }
 
 /**
@@ -82,6 +131,7 @@ export async function playSentenceAudio({
   text,
   lang = 'en-US',
   rate = 1.0,
+  onPreparing,
   onStart,
   onTimeUpdate,
   onEnd,
@@ -91,6 +141,7 @@ export async function playSentenceAudio({
   text: string;
   lang?: string;
   rate?: number;
+  onPreparing?: (message: string) => void;
   onStart?: () => void;
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
@@ -106,7 +157,7 @@ export async function playSentenceAudio({
   }
 
   const speedParam = rate === 1.0 ? '1.0' : String(rate);
-  const targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam);
+  const targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam, onPreparing);
 
   // If user triggered another sound while we were resolving URL, abort
   if (thisPlayId !== currentPlayId) {
@@ -114,9 +165,9 @@ export async function playSentenceAudio({
   }
 
   try {
-    const audio = new Audio(targetAudioUrl);
+    const audio = getSharedAudio();
+    audio.src = targetAudioUrl;
     audio.playbackRate = 1.0;
-    activeAudio = audio;
 
     const startProgressLoop = () => {
       if (activeRafId) {
@@ -124,7 +175,7 @@ export async function playSentenceAudio({
         activeRafId = null;
       }
       const tick = () => {
-        if (thisPlayId !== currentPlayId || !activeAudio || activeAudio !== audio || audio.paused || audio.ended) {
+        if (thisPlayId !== currentPlayId || audio.paused || audio.ended) {
           return;
         }
         const currentTime = audio.currentTime;
@@ -160,7 +211,6 @@ export async function playSentenceAudio({
           cancelAnimationFrame(activeRafId);
           activeRafId = null;
         }
-        activeAudio = null;
         onTimeUpdate?.({ currentTime: audio.duration || 0, duration: audio.duration || 1, ratio: 1.0 });
         onEnd?.();
       }
@@ -173,11 +223,11 @@ export async function playSentenceAudio({
           activeRafId = null;
         }
         console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
-        activeAudio = null;
         speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
       }
     };
 
+    audio.load();
     await audio.play();
   } catch (err) {
     if (thisPlayId === currentPlayId) {
@@ -271,6 +321,7 @@ export async function playPracticeTrack({
   text,
   lang = 'en-US',
   rate = 0.75,
+  onPreparing,
   onPhaseChange,
   onTimeUpdate,
   onEnd,
@@ -280,13 +331,14 @@ export async function playPracticeTrack({
   text: string;
   lang?: string;
   rate?: number;
+  onPreparing?: (message: string) => void;
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void;
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
 }) {
   stopAllAudio();
   const thisPlayId = currentPlayId;
-  runClientPracticeLoop(rawAudioUrl, text, lang, rate, thisPlayId, onPhaseChange, onTimeUpdate, onEnd);
+  runClientPracticeLoop(rawAudioUrl, text, lang, rate, thisPlayId, onPreparing, onPhaseChange, onTimeUpdate, onEnd);
 }
 
 function runClientPracticeLoop(
@@ -295,6 +347,7 @@ function runClientPracticeLoop(
   lang: string = 'en-US',
   rate: number = 0.75,
   playId: number,
+  onPreparing?: (message: string) => void,
   onPhaseChange?: (phase: 'playing1' | 'pause' | 'playing2' | 'idle') => void,
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void,
   onEnd?: () => void
@@ -310,6 +363,7 @@ function runClientPracticeLoop(
     text,
     lang,
     rate,
+    onPreparing,
     onTimeUpdate,
     onEnd: () => {
       if (playId !== currentPlayId) return;
@@ -330,6 +384,7 @@ function runClientPracticeLoop(
           text,
           lang,
           rate,
+          onPreparing,
           onTimeUpdate,
           onEnd: () => {
             if (playId === currentPlayId) {

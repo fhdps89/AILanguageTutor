@@ -5,21 +5,30 @@ import { UploadSection } from './components/UploadSection';
 import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark } from './types';
-import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X } from 'lucide-react';
+import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+
+function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem('ai_tutor_device_id');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem('ai_tutor_device_id', id);
+    }
+    return id;
+  } catch {
+    return 'dev_default';
+  }
+}
 
 export function App() {
   const [status, setStatus] = useState<SystemStatus>({
-    activeEngine: '확인 중...',
+    activeEngine: 'Google Gemini Vision (gemini-3.8-flash)',
     currentProvider: 'gemini',
-    currentModel: '',
-    build: '20260927-libname',
-    hasGemini: false,
-    hasOpenRouter: false,
-    hasXAI: false,
-    availableProviders: [],
+    currentModel: 'gemini-3.8-flash',
+    build: '20260930-gemini-single',
+    hasGemini: true,
   });
 
-  const [selectedProvider, setSelectedProvider] = useState<string>('gemini');
   const [demoChecked, setDemoChecked] = useState(false);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -28,17 +37,17 @@ export function App() {
   const [currentPage, setCurrentPage] = useState<LessonPage | null>(null);
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [audioFiles, setAudioFiles] = useState<Record<string, string>>({});
+  const [showPhoto, setShowPhoto] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  // Local storage helpers to preserve history across re-deployments
-  const STORAGE_LIB_KEY = 'ai_tutor_saved_library_v1';
-  const STORAGE_PAGES_KEY = 'ai_tutor_saved_pages_v1';
-  const STORAGE_BOOKMARK_KEY = 'ai_tutor_saved_bookmark_v1';
+  // Local storage helpers
+  const STORAGE_LIB_KEY = 'ai_tutor_saved_library_v2';
+  const STORAGE_PAGES_KEY = 'ai_tutor_saved_pages_v2';
+  const STORAGE_BOOKMARK_KEY = 'ai_tutor_saved_bookmark_v2';
 
   const [bookmark, setBookmark] = useState<StudyBookmark | null>(() => {
     try {
@@ -64,7 +73,7 @@ export function App() {
     } catch {}
   };
 
-  const getStoredPage = (key: string): { page: LessonPage; photoUrl?: string | null; audioFiles?: Record<string, string> } | null => {
+  const getStoredPage = (key: string): { page: LessonPage; photoUrl?: string | null } | null => {
     try {
       const raw = localStorage.getItem(`${STORAGE_PAGES_KEY}_${key}`);
       return raw ? JSON.parse(raw) : null;
@@ -73,13 +82,12 @@ export function App() {
     }
   };
 
-  const saveStoredPage = (key: string, data: { page: LessonPage; photoUrl?: string | null; audioFiles?: Record<string, string> }) => {
+  const saveStoredPage = (key: string, data: { page: LessonPage; photoUrl?: string | null }) => {
     try {
       localStorage.setItem(`${STORAGE_PAGES_KEY}_${key}`, JSON.stringify(data));
     } catch {}
   };
 
-  // 1. Initial status and library load
   useEffect(() => {
     fetchStatus();
     fetchLibraryAndLoadLatest();
@@ -87,17 +95,12 @@ export function App() {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/status', {
+        headers: { 'x-device-id': getDeviceId() },
+      });
       if (res.ok) {
         const data: SystemStatus = await res.json();
         setStatus(data);
-        if (data.availableProviders?.some(p => p.id === 'gemini')) {
-          setSelectedProvider('gemini');
-        } else if (data.currentProvider) {
-          setSelectedProvider(data.currentProvider);
-        } else if (data.availableProviders && data.availableProviders.length > 0) {
-          setSelectedProvider(data.availableProviders[0].id);
-        }
       }
     } catch (err) {
       console.error('Failed to fetch status', err);
@@ -108,7 +111,9 @@ export function App() {
     try {
       let serverList: LibraryItem[] = [];
       try {
-        const res = await fetch('/api/library');
+        const res = await fetch('/api/library', {
+          headers: { 'x-device-id': getDeviceId() },
+        });
         if (res.ok) {
           serverList = await res.json();
         }
@@ -126,9 +131,11 @@ export function App() {
       saveStoredLibrary(mergedList);
       setLibrary(mergedList);
 
+      // If user has lessons and none currently open, open their own latest lesson
       if (mergedList.length > 0 && !currentKey) {
-        setSelectedKey(mergedList[0].key);
-        loadLesson(mergedList[0].key);
+        const firstKey = mergedList[0].key;
+        setSelectedKey(firstKey);
+        loadLesson(firstKey);
       }
     } catch (err) {
       console.error('Failed to load library', err);
@@ -142,39 +149,38 @@ export function App() {
     setInfoMessage(null);
 
     try {
-      let loadedData: { page: LessonPage; key: string; photoUrl?: string | null; audioFiles?: Record<string, string> } | null = null;
+      let loadedData: { page: LessonPage; key: string; photoUrl?: string | null } | null = null;
 
       try {
-        const res = await fetch(`/api/lesson/${key}`);
+        const res = await fetch(`/api/lesson/${key}`, {
+          headers: { 'x-device-id': getDeviceId() },
+        });
         if (res.ok) {
           loadedData = await res.json();
         }
       } catch {}
 
-      // If server does not have the file (e.g. fresh container deploy), restore from localStorage
+      // If server does not have the file, restore from localStorage
       if (!loadedData) {
         const localData = getStoredPage(key);
         if (localData) {
           loadedData = { key, ...localData };
-          setInfoMessage('브라우저에 보존된 과거 학습 기록을 불러왔습니다.');
+          setInfoMessage('기기에 보존된 학습 기록을 불러왔습니다.');
         } else {
           throw new Error('페이지를 불러오지 못했습니다.');
         }
       }
 
-      // Cache cleaned data to local storage (never save temporary blob: URLs to photoUrl)
       if (loadedData) {
         saveStoredPage(key, {
           page: loadedData.page,
           photoUrl: loadedData.photoUrl || null,
-          audioFiles: loadedData.audioFiles,
         });
       }
 
       setCurrentPage(loadedData.page);
       setCurrentKey(loadedData.key);
       setPhotoUrl(loadedData.photoUrl || null);
-      setAudioFiles(loadedData.audioFiles || {});
       setSelectedKey(loadedData.key);
     } catch (err: any) {
       setErrorMessage(err.message);
@@ -190,14 +196,15 @@ export function App() {
     }
 
     try {
-      // 1. Call server to delete folder & library record
       try {
-        await fetch(`/api/lesson/${key}`, { method: 'DELETE' });
+        await fetch(`/api/lesson/${key}`, {
+          method: 'DELETE',
+          headers: { 'x-device-id': getDeviceId() },
+        });
       } catch (err) {
         console.warn('Server delete call failed, continuing local cleanup', err);
       }
 
-      // 2. Clean from localStorage
       try {
         localStorage.removeItem(`${STORAGE_PAGES_KEY}_${key}`);
         const currentStored = getStoredLibrary();
@@ -207,11 +214,9 @@ export function App() {
         console.warn('LocalStorage cleanup failed', err);
       }
 
-      // 3. Update React state
       const updatedList = library.filter((item) => item.key !== key);
       setLibrary(updatedList);
 
-      // If deleted lesson was currently open
       if (currentKey === key) {
         if (updatedList.length > 0) {
           setSelectedKey(updatedList[0].key);
@@ -221,13 +226,12 @@ export function App() {
           setCurrentKey(null);
           setSelectedKey(null);
           setPhotoUrl(null);
-          setAudioFiles({});
         }
       } else if (selectedKey === key) {
         setSelectedKey(updatedList.length > 0 ? updatedList[0].key : null);
       }
 
-      setInfoMessage(`"${displayName}" 분석 기록이 삭제되었습니다.`);
+      setInfoMessage(`"${displayName}" 기록이 삭제되었습니다.`);
     } catch (err: any) {
       setErrorMessage(`삭제 중 오류가 발생했습니다: ${err.message}`);
     }
@@ -249,65 +253,63 @@ export function App() {
       lessonKey: currentKey,
       lessonTitle,
       sentenceId,
-      sentenceText: cleanSnippet.length > 50 ? cleanSnippet.slice(0, 50) + '...' : cleanSnippet,
+      sentenceText: cleanSnippet.length > 50 ? `${cleanSnippet.slice(0, 50)}...` : cleanSnippet,
       updatedAt: new Date().toISOString(),
     };
 
     setBookmark(newBookmark);
-    localStorage.setItem(STORAGE_BOOKMARK_KEY, JSON.stringify(newBookmark));
-    setInfoMessage(`📌 [${sentenceId}] 문장이 '내일은 여기서부터 시작' 지점으로 지정되었습니다.`);
+    try {
+      localStorage.setItem(STORAGE_BOOKMARK_KEY, JSON.stringify(newBookmark));
+      setInfoMessage(`[${sentenceId}] 문장이 내일 학습 시작 지점으로 저장되었습니다.`);
+    } catch {}
   };
 
-  const handleResumeBookmark = async () => {
+  const handleResumeBookmark = () => {
     if (!bookmark) return;
 
     if (currentKey !== bookmark.lessonKey) {
-      await loadLesson(bookmark.lessonKey);
+      loadLesson(bookmark.lessonKey);
     }
 
     setTimeout(() => {
       const el = document.getElementById(`sentence-${bookmark.sentenceId}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-4', 'ring-amber-400');
-        setTimeout(() => {
-          el.classList.remove('ring-4', 'ring-amber-400');
-        }, 2200);
       }
-    }, 350);
+    }, 300);
   };
 
-  const handleClearBookmark = () => {
+  const handleClearBookmark = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setBookmark(null);
     localStorage.removeItem(STORAGE_BOOKMARK_KEY);
-    setInfoMessage('시작 지점 북마크가 해제되었습니다.');
+    setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
 
   const handleRunDemo = async () => {
     setIsLoading(true);
-    setLoadingMessage('데모 페이지 음성 및 데이터를 불러오는 중...');
+    setLoadingMessage('데모 페이지를 로드하는 중입니다...');
     setErrorMessage(null);
     setInfoMessage(null);
 
     try {
-      const res = await fetch('/api/demo');
+      const res = await fetch('/api/demo', {
+        headers: { 'x-device-id': getDeviceId() },
+      });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '데모를 불러오지 못했습니다.');
+        throw new Error('데모 데이터를 불러오지 못했습니다.');
       }
       const data = await res.json();
       setCurrentPage(data.page);
       setCurrentKey('demo-arc');
       setSelectedKey('demo-arc');
       setPhotoUrl(null);
-      const demoAudios = data.audioFiles || {};
-      setAudioFiles(demoAudios);
+
       saveStoredPage('demo-arc', {
         page: data.page,
         photoUrl: null,
-        audioFiles: demoAudios,
       });
-      setInfoMessage('개선문 데모 페이지를 불러왔습니다. Gemini 고품질 원어민 음성으로 바로 학습해보세요.');
+      setInfoMessage('개선문 데모 페이지를 불러왔습니다. Gemini 원어민 음성으로 바로 학습해보세요.');
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -318,24 +320,18 @@ export function App() {
   const handleRunPhoto = async () => {
     if (!selectedFile) return;
 
-    const currentProviderObj = status.availableProviders.find(p => p.id === selectedProvider);
-    const engineLabel = currentProviderObj ? currentProviderObj.name : status.activeEngine;
-
     setIsLoading(true);
-    setLoadingMessage(`Vision OCR 분석 중 (${engineLabel})...`);
+    setLoadingMessage('Google Gemini 3.8 Flash Vision으로 언어 판독 & 분석 중...');
     setErrorMessage(null);
     setInfoMessage(null);
 
     try {
       const formData = new FormData();
       formData.append('photo', selectedFile);
-      formData.append('provider', selectedProvider);
-      if (currentProviderObj?.model) {
-        formData.append('model', currentProviderObj.model);
-      }
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
+        headers: { 'x-device-id': getDeviceId() },
         body: formData,
       });
 
@@ -350,14 +346,10 @@ export function App() {
       setSelectedKey(data.key);
       const activePhotoUrl = data.photoUrl || URL.createObjectURL(selectedFile);
       setPhotoUrl(activePhotoUrl);
-      const returnedAudioFiles = data.audioFiles || {};
-      setAudioFiles(returnedAudioFiles);
 
-      // Save to localStorage: use persistent server photoUrl, never volatile blob: URL
       saveStoredPage(data.key, {
         page: data.page,
         photoUrl: data.photoUrl || null,
-        audioFiles: returnedAudioFiles,
       });
 
       const newItem: LibraryItem = {
@@ -370,6 +362,7 @@ export function App() {
         n_sentences: data.page.sentences.length,
         saved_at: new Date().toISOString(),
         language: data.page.language,
+        ownerId: getDeviceId(),
       };
       const curList = getStoredLibrary();
       const updatedList = [newItem, ...curList.filter(item => item.key !== data.key)];
@@ -379,7 +372,7 @@ export function App() {
         setInfoMessage('이미 분석한 사진입니다. 캐시된 데이터를 재사용합니다.');
       } else {
         const langLabel = data.page?.language ? `${data.page.language.flag} ${data.page.language.name_ko}` : '외국어';
-        setInfoMessage(`[${engineLabel}] ${langLabel} 언어 판독 및 구문 분해가 완료되었습니다!`);
+        setInfoMessage(`[Gemini Vision] ${langLabel} 언어 감지 및 구문 분해가 완료되었습니다!`);
       }
 
       fetchLibraryAndLoadLatest();
@@ -391,15 +384,13 @@ export function App() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-3 sm:px-4 py-6 sm:py-8">
       <Header build={status.build} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         {/* Sidebar */}
         <Sidebar
           status={status}
-          selectedProvider={selectedProvider}
-          onSelectProvider={setSelectedProvider}
           demoChecked={demoChecked}
           onDemoChange={setDemoChecked}
           library={library}
@@ -440,7 +431,7 @@ export function App() {
             </div>
           )}
 
-          {/* "내일은 여기서부터 시작" 이어 학습하기 북마크 배너 */}
+          {/* Bookmark banner */}
           {bookmark && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 border border-amber-300/80 p-4 shadow-xs">
               <div className="flex items-center gap-3">
@@ -483,7 +474,7 @@ export function App() {
             </div>
           )}
 
-          {/* Page Display (render_page equivalent) */}
+          {/* Page Display */}
           {currentPage ? (
             <div className="space-y-6">
               {/* Disclaimer */}
@@ -494,15 +485,29 @@ export function App() {
                 </span>
               </div>
 
-              {/* Uploaded photo if exists */}
+              {/* Uploaded photo with collapsible view for mobile space saving */}
               {photoUrl && (
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white p-3 shadow-xs">
-                  <div className="text-xs font-semibold text-slate-500 mb-2">분석된 원본 사진</div>
-                  <img
-                    src={photoUrl}
-                    alt="Uploaded page"
-                    className="max-h-96 w-full object-contain rounded-lg bg-slate-50"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowPhoto(!showPhoto)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 transition cursor-pointer"
+                    >
+                      <ImageIcon className="h-4 w-4 text-indigo-500" />
+                      <span>분석된 원본 사진 {showPhoto ? '접기' : '보기'}</span>
+                      {showPhoto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  {showPhoto && (
+                    <div className="mt-2 pt-2 border-t border-slate-100">
+                      <img
+                        src={photoUrl}
+                        alt="Uploaded page"
+                        className="max-h-96 w-full object-contain rounded-lg bg-slate-50"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -511,11 +516,9 @@ export function App() {
                 title={currentPage.library_name || currentPage.title || '학습 본문'}
                 fullScript={currentPage.full_tts_script || ''}
                 language={currentPage.language}
-                audioUrl={audioFiles['lecture_complete.mp3']}
                 lessonKey={currentKey}
                 pageData={currentPage}
                 sentences={currentPage.sentences || []}
-                audioFiles={audioFiles}
               />
 
               {/* Sentence Breakdown List */}
@@ -530,8 +533,6 @@ export function App() {
                 </div>
 
                 {currentPage.sentences?.map((sentence) => {
-                  const rawAudio = audioFiles[`${sentence.id}.mp3`];
-                  const practiceAudio = audioFiles[`${sentence.id}_practice.mp3`];
                   const isBookmarked = bookmark?.lessonKey === currentKey && bookmark?.sentenceId === sentence.id;
 
                   return (
@@ -539,8 +540,6 @@ export function App() {
                       key={sentence.id}
                       sentence={sentence}
                       language={currentPage.language}
-                      rawAudioUrl={rawAudio}
-                      practiceAudioUrl={practiceAudio}
                       isBookmarked={isBookmarked}
                       onToggleBookmark={() => handleToggleBookmark(sentence.id, sentence.raw_text)}
                     />
