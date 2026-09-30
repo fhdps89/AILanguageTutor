@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
-import { Play, Pause, Repeat, Mic, Volume2, Bookmark, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
-import { playSentenceAudio, playPracticeTrack, stopAllAudio } from '../utils/audio';
+import { Play, Pause, Volume2, Bookmark, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { playSentenceAudio, stopAllAudio } from '../utils/audio';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 
 interface SentenceCardProps {
@@ -17,13 +17,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   sentence,
   language,
   rawAudioUrl,
-  practiceAudioUrl,
   isBookmarked = false,
   onToggleBookmark,
 }) => {
-  const [isPlayingNative, setIsPlayingNative] = useState(false);
-  const [practicePhase, setPracticePhase] = useState<'idle' | 'playing1' | 'pause' | 'playing2'>('idle');
-  const [practiceRate, setPracticeRate] = useState<0.5 | 0.75>(0.75);
+  // activePlayRate: currently playing rate (1.0 | 0.75 | 0.5), null if idle
+  const [activePlayRate, setActivePlayRate] = useState<1.0 | 0.75 | 0.5 | null>(null);
   const [activeChunk, setActiveChunk] = useState<string | null>(null);
   const [activeVocab, setActiveVocab] = useState<string | null>(null);
   const [preparingMessage, setPreparingMessage] = useState<string | null>(null);
@@ -42,78 +40,42 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const isFrench = (language?.code || '').startsWith('fr');
   const isKoreanMode = (language?.code || '').startsWith('ko');
 
-  const handlePlayNative = () => {
-    if (isPlayingNative || preparingMessage) {
+  const handlePlayRate = (rate: 1.0 | 0.75 | 0.5) => {
+    // If currently playing or preparing this exact rate, toggle stop
+    if (activePlayRate === rate || (preparingMessage && activePlayRate === rate)) {
       stopAllAudio();
-      setIsPlayingNative(false);
+      setActivePlayRate(null);
       setPreparingMessage(null);
       setPlaybackTime({ currentTime: 0, duration: 0 });
       return;
     }
 
     stopAllAudio();
-    setPracticePhase('idle');
     setActiveChunk(null);
     setActiveVocab(null);
     setPlaybackTime({ currentTime: 0, duration: 0 });
 
     playSentenceAudio({
-      audioUrl: rawAudioUrl,
+      audioUrl: rate === 1.0 ? rawAudioUrl : null,
       text: textToSpeak,
       lang: langParam,
-      rate: 1.0,
-      onPreparing: (msg) => setPreparingMessage(msg),
+      rate,
+      onPreparing: (msg) => {
+        setActivePlayRate(rate);
+        setPreparingMessage(msg);
+      },
       onStart: () => {
         setPreparingMessage(null);
-        setIsPlayingNative(true);
+        setActivePlayRate(rate);
       },
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
       onEnd: () => {
-        setIsPlayingNative(false);
+        setActivePlayRate(null);
         setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
       onError: () => {
-        setIsPlayingNative(false);
-        setPreparingMessage(null);
-        setPlaybackTime({ currentTime: 0, duration: 0 });
-      },
-    });
-  };
-
-  const handlePlayPractice = (rate: 0.5 | 0.75) => {
-    if ((practicePhase !== 'idle' || preparingMessage) && practiceRate === rate) {
-      stopAllAudio();
-      setPracticePhase('idle');
-      setPreparingMessage(null);
-      setPlaybackTime({ currentTime: 0, duration: 0 });
-      return;
-    }
-
-    stopAllAudio();
-    setIsPlayingNative(false);
-    setActiveChunk(null);
-    setActiveVocab(null);
-    setPracticeRate(rate);
-    setPlaybackTime({ currentTime: 0, duration: 0 });
-
-    playPracticeTrack({
-      practiceAudioUrl,
-      rawAudioUrl,
-      text: textToSpeak,
-      lang: langParam,
-      rate,
-      onPreparing: (msg) => setPreparingMessage(msg),
-      onPhaseChange: (phase) => {
-        setPreparingMessage(null);
-        setPracticePhase(phase);
-        if (phase === 'pause' || phase === 'idle') {
-          setPlaybackTime({ currentTime: 0, duration: 0 });
-        }
-      },
-      onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
-      onEnd: () => {
-        setPracticePhase('idle');
+        setActivePlayRate(null);
         setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
@@ -129,8 +91,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     }
 
     stopAllAudio();
-    setIsPlayingNative(false);
-    setPracticePhase('idle');
+    setActivePlayRate(null);
     setActiveVocab(null);
     setActiveChunk(chunkText);
     setPlaybackTime({ currentTime: 0, duration: 0 });
@@ -163,8 +124,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     }
 
     stopAllAudio();
-    setIsPlayingNative(false);
-    setPracticePhase('idle');
+    setActivePlayRate(null);
     setActiveChunk(null);
     setActiveVocab(wordText);
 
@@ -185,13 +145,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     });
   };
 
+  const isAudioPlaying = activePlayRate !== null && !preparingMessage;
+
   const renderKaraokeText = (
     text: string,
-    isAudioPlaying: boolean,
+    isPlaying: boolean,
     currentTime: number,
     duration: number
   ) => {
-    if (!isAudioPlaying || duration <= 0) {
+    if (!isPlaying || duration <= 0) {
       return <span className="text-slate-900 font-serif leading-relaxed">{text}</span>;
     }
 
@@ -287,22 +249,22 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             {language ? `${language.flag} ${language.name_ko}:` : '원문:'}
           </span>
-          {(isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2') && (
+          {isAudioPlaying && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
-              🎤 노래방 싱크 진행 중
+              🎤 노래방 싱크 진행 중 ({activePlayRate}x)
             </span>
           )}
         </div>
         <p className="text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
           {renderKaraokeText(
             sentence.raw_text,
-            isPlayingNative || practicePhase === 'playing1' || practicePhase === 'playing2',
+            isAudioPlaying,
             playbackTime.currentTime,
             playbackTime.duration
           )}
         </p>
 
-        {/* U1 Fix: Pronunciation / liaison hint visible on mobile as well */}
+        {/* Pronunciation / liaison hint */}
         {pronHint && (
           <div className="mt-2 inline-flex items-center gap-1 text-xs text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
             <span className="font-bold text-amber-800">{isFrench ? '🗣️ 연음' : '🗣️ 발음'}:</span>
@@ -317,94 +279,74 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         )}
       </div>
 
-      {/* Audio Controls */}
+      {/* Audio Controls (1회 낭독 통일) */}
       <div className="mb-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
         <div className="flex flex-wrap items-center gap-2">
           {/* Native 1.0x button */}
           <button
-            onClick={handlePlayNative}
+            onClick={() => handlePlayRate(1.0)}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-              isPlayingNative
+              activePlayRate === 1.0 && !preparingMessage
                 ? 'bg-amber-600 text-white hover:bg-amber-700'
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
             }`}
-            title="원어민 일반 속도(1.0x)로 문장 전체 청취"
+            title="원어민 일반 속도(1.0x)로 1회 청취"
           >
-            {isPlayingNative ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+            {activePlayRate === 1.0 && !preparingMessage ? (
+              <Pause className="h-3.5 w-3.5" />
+            ) : (
+              <Play className="h-3.5 w-3.5 fill-current" />
+            )}
             원어민 1.0x
           </button>
 
-          {/* Practice 0.75x button */}
+          {/* 0.75x button (1회 청취) */}
           <button
-            onClick={() => handlePlayPractice(0.75)}
+            onClick={() => handlePlayRate(0.75)}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-              practicePhase !== 'idle' && practiceRate === 0.75
+              activePlayRate === 0.75 && !preparingMessage
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
             }`}
-            title="여유로운 원어민 학습 템포(0.75x)로 듣고 따라하기 자동 반복"
+            title="여유로운 템포(0.75x)로 1회 청취"
           >
-            {practicePhase !== 'idle' && practiceRate === 0.75 ? (
+            {activePlayRate === 0.75 && !preparingMessage ? (
               <Pause className="h-3.5 w-3.5" />
             ) : (
-              <Repeat className="h-3.5 w-3.5" />
+              <Play className="h-3.5 w-3.5 fill-current" />
             )}
-            0.75x 쉐도잉
+            0.75x 쉐도잉 (여유 템포)
           </button>
 
-          {/* Practice 0.5x button */}
+          {/* 0.5x button (1회 청취) */}
           <button
-            onClick={() => handlePlayPractice(0.5)}
+            onClick={() => handlePlayRate(0.5)}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
-              practicePhase !== 'idle' && practiceRate === 0.5
+              activePlayRate === 0.5 && !preparingMessage
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                 : 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50/70'
             }`}
-            title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 듣고 따라하기"
+            title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 1회 청취"
           >
-            {practicePhase !== 'idle' && practiceRate === 0.5 ? (
+            {activePlayRate === 0.5 && !preparingMessage ? (
               <Pause className="h-3.5 w-3.5" />
             ) : (
-              <Repeat className="h-3.5 w-3.5" />
+              <Play className="h-3.5 w-3.5 fill-current" />
             )}
-            0.5x 조음 훈련
+            0.5x 조음 훈련 (또박또박)
           </button>
         </div>
 
-        {/* Humorous and engaging dynamic voice preparing indicator */}
+        {/* Dynamic voice preparing indicator */}
         {preparingMessage && (
           <div className="mt-2.5 flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-100/80 px-3 py-1.5 rounded-md border border-amber-300 animate-pulse">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 shrink-0" />
             <span className="font-semibold">{preparingMessage}</span>
           </div>
         )}
-
-        {/* Practice phase indicator badge */}
-        {practicePhase !== 'idle' && (
-          <div className="flex items-center gap-1.5 text-xs font-medium w-full sm:w-auto mt-2.5">
-            {practicePhase === 'playing1' && (
-              <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full animate-pulse border border-indigo-200/60">
-                <Volume2 className="h-3 w-3" />
-                1회차 듣기 ({practiceRate}x)...
-              </span>
-            )}
-            {practicePhase === 'pause' && (
-              <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 animate-bounce">
-                <Mic className="h-3.5 w-3.5 text-emerald-600" />
-                지금 소리 내어 따라 읽어보세요!
-              </span>
-            )}
-            {practicePhase === 'playing2' && (
-              <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full animate-pulse border border-indigo-200/60">
-                <Volume2 className="h-3 w-3" />
-                2회차 확인 듣기 ({practiceRate}x)...
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Translation (Default Visible for beginner target learners) */}
+      {/* Translation */}
       <div className="mb-3 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
           {isKoreanMode ? '영어 번역 (Translation):' : '한국어 번역:'}
@@ -490,7 +432,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
       ) : null}
 
-      {/* U3 Accordion Controls: Toggle buttons for Syntax diagram and Vocabulary */}
+      {/* Accordion Controls for Syntax diagram and Vocabulary */}
       <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
         {hasSyntax && (
           <button

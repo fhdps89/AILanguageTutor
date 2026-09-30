@@ -511,16 +511,6 @@ export function App() {
                 </div>
               )}
 
-              {/* Full Page 1.0x Player */}
-              <FullPagePlayer
-                title={currentPage.library_name || currentPage.title || '학습 본문'}
-                fullScript={currentPage.full_tts_script || ''}
-                language={currentPage.language}
-                lessonKey={currentKey}
-                pageData={currentPage}
-                sentences={currentPage.sentences || []}
-              />
-
               {/* Sentence Breakdown List */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -528,7 +518,7 @@ export function App() {
                     문장별 쉐도잉 훈련 ({currentPage.sentences?.length || 0}문장)
                   </h3>
                   <span className="text-xs text-slate-500">
-                    원문 청취(1.0x) 및 반복 쉐도잉(0.75x / 0.5x)
+                    원문 청취(1.0x) 및 배속 조절(0.75x / 0.5x)
                   </span>
                 </div>
 
@@ -545,6 +535,18 @@ export function App() {
                     />
                   );
                 })}
+              </div>
+
+              {/* Full Page 1.0x Player (Moved to bottom so audio is pre-cached from sentence practice) */}
+              <div className="pt-2">
+                <FullPagePlayer
+                  title={currentPage.library_name || currentPage.title || '학습 본문'}
+                  fullScript={currentPage.full_tts_script || ''}
+                  language={currentPage.language}
+                  lessonKey={currentKey}
+                  pageData={currentPage}
+                  sentences={currentPage.sentences || []}
+                />
               </div>
             </div>
           ) : (
