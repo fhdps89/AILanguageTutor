@@ -1,142 +1,63 @@
-# AI 어학 튜터 (AI Language Tutor) 개발 & 운영 핵심 레퍼런스
+# AI 어학 튜터 (AI Language Tutor) — 프로젝트 컨텍스트
 
-> **작성일자:** 2026-09-29  
-> **기준 빌드 버전:** `20260928-multilingual-v7` (한국어 원서 모드 + 보안 강화 완비판)  
-> **목적:** 대화 히스토리 초기화(Reset) 후에도 모든 핵심 아키텍처, 기능 구현 상태, 음성 엔진, 역방향 한국어 학습 모드 및 보안 설정을 완벽히 유지하기 위한 종합 인수인계 문서
-
----
-
-## 1. 프로젝트 개요 & 핵심 철학
-- **앱 명칭:** AI 어학 튜터 / AI 다국어 쉐도잉 튜터 (AI Multilingual Language Tutor)
-- **공식 라이브 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
-- **인프라:** Google AI Studio Applet (Google Cloud Run 기반 컨테이너 런타임 + 글로벌 CDN)
-- **양방향 언어 지원:**
-  1. **외국어 학습 모드 (한국인 대상):** 프랑스어(초기 데모: 개선문 텍스트), 영어, 일본어, 중국어, 스페인어, 독일어 등
-  2. **한국어 학습 모드 (외국인/영어권 대상):** 한국어 원서, 잡지, 기사, 수필 사진 업로드 시 자동 전환
-- **사용자 워크플로우:**
-  1. 교재나 원서 사진 촬영/업로드
-  2. Gemini 멀티모달 OCR 자동 언어 판독 및 본문 추출
-  3. 언어별 맞춤 학습 분해:
-     - 외국어: 슬래시(`/`) 끊어 읽기 청크, ASCII 구문 분석도, 어휘 사전, 문법/발음 해설
-     - 한국어: 조사/어미 문법 청크, 단일 소리 로마자, 격식도 배지, 영문 번역, 사전 원형 어휘
-  4. 원어민 고음질 오디오 스트리밍 청취 (전체 본문 노래방 칼싱크, 문장별 1.0x / 0.75x / 0.5x 네이티브 쉐도잉, 단어/구문 터치 발음)
+> **공식 빌드 버전:** `build 20260930-gemini-single`  
+> **최신 업데이트 일자:** 2026-10-01 (KST)  
+> **공식 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)  
+> **아키텍처 표준:** 계층화 문서화 및 배포 격리 아키텍처 (루트 문서 5KB 미만 유지, 모든 기록 일자 KST 기준)
 
 ---
 
-## 2. 배포 및 런타임 환경 아키텍처
+## 🎯 1. 프로젝트 비전 (Project Vision)
 
-| 구분 | 환경 설명 | URL / 엔드포인트 | 배포/반영 방식 |
-| :--- | :--- | :--- | :--- |
-| **운영 환경 (Production)** | 전 세계 사용자 대상 공식 라이브 서비스 | [https://langtutor.ai.studio/](https://langtutor.ai.studio/) | AI Studio 상단의 **[Publish(게시)]** 버튼 클릭 시 `npm run build` 후 무중단 배포 |
-| **개발 환경 (Development)** | 실시간 코드 변경/테스트 런타임 | `https://ais-dev-...` (AI Studio 프리뷰) | `tsx server.ts` (Express + Vite) 내부 3000 포트 실시간 반영 |
-| **인증/보안 (Credentials)** | Google Gemini Vision & Native TTS | 서버 환경변수 자동 연동 | `.env` 및 민감 정보 레포지토리 배제, 서버 환경 변수로 안전 보호 |
+**"어떤 언어의 책이든, 사진 한 장으로 시작하는 가장 자연스러운 1:1 원어민 쉐도잉 훈련소"**
 
----
-
-## 3. 오디오/음성 시스템 아키텍처 (핵심)
-
-### ① TTS 엔진: Google Gemini Native Speech
-- **모델명:** `gemini-3.8-flash-lite-tts`
-- **보이스 프로필:** `Kore` (부드럽고 정확한 네이티브 전달력)
-- **속도 제어 혁신 (기계적 왜곡 및 '지지직' 노이즈 원천 제거):**
-  - **기존 문제점:** 브라우저 HTML5 Audio의 `playbackRate = 0.75 / 0.5`를 적용하면 브라우저 내장 시간 신장(WSOLA 알고리즘)으로 인해 금속성 울림, 페이징 왜곡, 지지직거리는 노이즈가 발생함.
-  - **해결책 (Gemini 네이티브 속도 발화):**
-    - 백엔드(`/api/tts?speed=0.75` 및 `speed=0.5`)에서 Gemini TTS의 `speechMetadata.style` 프롬프트로 느린 속도의 발화를 직접 지시.
-    - **0.75x:** 여유로운 학습자 템포로 호흡과 억양을 살려 부드럽고 또렷하게 발화.
-    - **0.5x:** 초급자를 위해 모든 음소와 모음, 자음을 하나하나 정성스럽고 또렷하게 조음(articulate)하여 발화.
-    - 브라우저는 오디오를 기계적으로 늘리지 않고 정상 속도(`playbackRate = 1.0`)로 바로 재생하므로, **노이즈나 지지직거림이 0%인 완벽한 원어민 육성 음질** 구현.
-
-### ② 스마트 오디오 디스크 캐싱 시스템
-- **저장 위치:** `./cache/tts/[hash].wav`
-- **해시 알고리즘:** `SHA-256(text + "_" + lang + "_" + voice + "_" + speed)`
-- **동작 원리:**
-  - **최초 호출:** Gemini TTS API 호출 후 디스크에 `.wav` 파일로 저장 (소요 시간 ~1초)
-  - **이후 호출:** 디스크에서 바로 로딩하여 즉시 스트리밍 반환 (지연 시간 ~0.003초 / 3ms)
-  - **단어 및 구문 재사용 (공용 캐시):**
-    - 동일 어휘는 한 번 생성되면 다른 페이지나 다른 사용자가 접속해도 API 재호출 없이 캐시에서 재생.
-    - API 호출 횟수 및 비용 원천 절약.
-- **용량 체계:**
-  - 단어 1개: 약 10~20 KB
-  - 문장 1개: 약 50~100 KB
-  - 100페이지 이상 분량도 수십~100 MB 내외로 서버 디스크 부담 거의 없음.
+전 세계 언어 학습자가 언어 장벽 없이 실전 인쇄물(원서, 잡지, 신문, 교재)을 즉시 학습 자료로 전환하고, 네이티브 원어민의 음성과 호흡을 100% 흡수할 수 있는 지능형 튜터링 플랫폼입니다.
+한국인의 외국어(프랑스어, 영어, 일본어 등) 학습은 물론, 글로벌 학습자의 한국어 원서 학습(K-Language Engine)을 단일 파이프라인에서 매끄럽게 지원합니다.
 
 ---
 
-## 4. 데이터 저장 및 보안 모델
+## 🧑‍🏫 2. 튜터 페르소나 (Tutor Persona)
 
-| 데이터 구분 | 저장 위치 | 공유 범위 및 보안 수준 |
-| :--- | :--- | :--- |
-| **TTS 음성 파일 (`.wav`)** | 서버 `/cache/tts/` | **공용 캐시 (모든 사용자 공유)** - 중복 API 비용 0원 |
-| **교재 분석/서재 목록** | 사용자 브라우저 LocalStorage | **개인별 분리** (내 서재는 내 기기에만 노출) |
-| **서버 백업 캐시** | 서버 `/cache/library.json`, `/cache/[pageKey]/` | 서버 복구 및 빠른 서빙용 |
-| **보안 자격증명/API 키** | 서버 프로세스 메모리 (`process.env`) | **외부 노출 0%** (클라이언트 번들 및 Git 레포지토리 배제) |
-
----
-
-## 5. 핵심 프론트엔드 및 AI 학습 기능 현황
-
-### ① 한국어 원서 학습 모드 (Global Learners studying Korean)
-- **Zero Mode Toggle:** 수동 버튼 조작 없이 판독 언어(`ko`)에 따라 자동 카드 레이아웃 전환.
-- **단일 소리 로마자 (One Phonetic Romanization):** 음운 동화/연음이 반영된 실제 발음 표기 (예: "gieop-ui seongjang-eun...").
-- **문법 청크 (Grammatical Chunks):** 조사 및 용언 어미 분해 시각화 (`기업의` ➔ `possessive 의`, `이루어지지 않기` ➔ `이루어지다 + 지 않 + 기`).
-- **격식도 배지 (Formality Tagging):** 하십시오체/해요체/반말만 선별 표시 (서술체 `-다`는 null로 깔끔하게 정돈).
-- **광학 및 환각 방어:** 뒷면 비침 무시, 각주 별표 제거, 하단 잘린 문장 말줄임표 안전 마감.
-
-### ② 외국어 학습 모드 (Korean Learners studying Foreign Languages)
-- **끊어 읽기 모드 (Chunk Mode):** 슬래시(`/`) 단위로 의미 덩어리 시각화 + 탭 시 해당 구문 즉시 발음.
-- **어휘 강조 모드 (Vocab Mode):** 핵심 단어 하이라이트 + 탭 시 단어 뜻/품사 툴팁 및 단어 발음.
-- **문장별 카드 모드:** 한국어 번역 대조, 1.0x 원어민 듣기, 0.75x/0.5x 감속 쉐도잉 반복.
-
-### ③ 재생 엔진 & 지속 학습
-- **60fps 노래방 칼싱크 (Karaoke Sync):** 모음 핵/자음/쉼표 호흡 시간 가중치 모델링 기반 실시간 단어 하이라이트 (Zero Layout Shift).
-- **문장 릴레이 전체 지문 플레이어:** 문장 간 350ms 자연스러운 숨 고르기(Breath Cadence) 및 누적 오차 0% 구현.
-- **"내일은 여기서부터 시작" 북마크 & 이어하기:** 원클릭 학습 위치 저장, 최상단 이어하기 배너, 스크롤 이동 및 포커스 펄스 효과.
+- **페르소나 정의:** 따뜻하고 지적이며 학습자의 눈높이에 맞추는 **원어민 전문 어학 코치(Master Language Coach)**.
+- **발화 톤 & 매너:**
+  - 초급자에게는 모음과 자음을 정성스럽게 또박또박 짚어주는 인내심 있는 멘토 (`0.5x`).
+  - 중급자에게는 자연스러운 숨 고르기와 연음 리듬을 살려주는 동반자 (`0.75x`, `1.0x`).
+  - 기계적인 팝업이나 불필요한 선택 강요 없이, 학습자가 올린 글을 존중하며 즉시 최적의 카드와 소리로 응답.
+- **교수법 철학:** 소리 ➔ 청크(의미 덩어리) ➔ 뉘앙스로 이어지는 직관적 체득 방식.
 
 ---
 
-## 6. 주요 소스 파일 경로
-- `server.ts`: Gemini 멀티모달 OCR 분석 API, `gemini-3.8-flash-lite-tts` 음성 생성 엔드포인트(`/api/tts`), 디스크 캐시 관리
-- `src/App.tsx`: 메인 애플리케이션 라우팅, 업로드 모달, 교재 뷰어, '내일은 여기서부터 시작' 북마크/이어하기 배너, 오디오 컨트롤러
-- `src/components/SentenceCard.tsx`: 문장 카드, 원어민 1.0x / 0.75x / 0.5x 연습 루프, 끊어 읽기, 어휘 툴팁, 한국어 문법 청크, '여기서부터 시작' 북마크 버튼
-- `src/components/FullPagePlayer.tsx`: 전체 본문 연속 재생 플레이어 (노래방 싱크 연동)
-- `src/utils/karaokeSync.ts`: 60fps 오디오-텍스트 실시간 정렬 엔진
-- `src/utils/audio.ts`: Gemini Native TTS 스트리밍 및 쉐도잉 루프 제어
-- `cache/tts/`: 생성된 원어민 음성 `.wav` 파일 저장소 (디스크 캐시)
-- `cache/library.json`: 교재 메타데이터 백엔드 캐시
-- `KOREAN_LEARNING_SPEC.md`: 한국어 학습 모드 상세 기획 명세서
-- `KOREAN_MODE_REVIEW.md`: 한국어 학습 모드 품질 리뷰 및 방어 기준서
-- `README.md`: 프로젝트 공식 소개 및 라이브 서비스 배포 안내 문서
+## 🏗️ 3. 핵심 시스템 아키텍처 (Core Architecture)
+
+```
+[교재 이미지] ──► [Gemini 3.8 Flash Vision] ──► [자동 언어 판독 & 카드 분해]
+                                                       │
+                                 ┌─────────────────────┴─────────────────────┐
+                                 ▼                                           ▼
+                      [외국어 모드 (한국인 대상)]                 [한국어 모드 (외국인 대상)]
+                      • 끊어 읽기 청크 & 구문 분석도               • 단일 소리 로마자
+                      • 핵심 어휘 및 한국어 번역                   • 조사/어미 분해 & 격식도
+                                 │                                           │
+                                 └─────────────────────┬─────────────────────┘
+                                                       │
+                                                       ▼
+                                      [Gemini Native TTS Engine]
+                                      • 모델: gemini-3.8-flash-lite-tts (Kore)
+                                      • 0.75x / 0.5x 네이티브 스타일 발화
+                                      • SHA-256 디스크 캐시 (3ms 응답)
+```
 
 ---
 
-## 7. 오늘(2026-09-29) 완료된 작업 & 체크포인트
+## 📑 4. 심층 아카이브 허브 링크 인덱스 (Docs Index)
 
-1. **GitHub Secret Scanning 알림 철저 점검 및 보안 조치 완료:**
-   - **원인 파악:** 깃허브 보안 봇이 AI Studio 자동 생성 파일이었던 `firebase-applet-config.json`의 4번째 줄 Firebase Web Client 키(`AIzaSy...`)를 기계적으로 감지하여 발송한 알림 확인.
-   - **무결성 검증:** 실제 Gemini API Key 및 결제 시크릿은 서버 환경변수로 관리되어 레포지토리에 전혀 노출되지 않았음을 100% 확인.
-   - **레포지토리 정리:** 불필요했던 `firebase-applet-config.json` 파일을 완전히 제거하고, `.gitignore`에 추가하여 향후 깃 추적 및 노출을 원천 차단.
-2. **한국어 원서 학습 모드(K-Language Learning Engine) 구축 및 안정화:**
-   - 외국인 학습자를 위한 단일 소리 로마자, 문법 조사/어미 분해 청크, 격식도 배지, 환각 방어 로직 완비.
-   - `KOREAN_LEARNING_SPEC.md` 및 `KOREAN_MODE_REVIEW.md` 최신화.
-3. **긴급 UX 개선 완료:**
-   - 0.75x 및 0.5x 음성을 1.0x와 동일하게 중간 멈춤/반복 없이 1회 깔끔하게 재생하고 끝나는 방식으로 통일.
-   - 전문 연속 낭독 섹션(`FullPagePlayer`)을 문장별 쉐도잉 훈련 리스트 맨 아래로 이동하여 문장별 사전 캐시 후 연속 청취가 가능하도록 순서 재배치.
-4. **빌드 검증 완료:**
-   - `npm run build` 컴파일 무결성 정상 통과.
+상세 설계, 전체 변경 이력(KST 기준), 트러블슈팅 내역은 배포 격리된 `docs/` 디렉토리에 영구 보존됩니다.
 
----
-
-## 8. 차기 스프린트(1~2주 내) 최우선 착수 작업 목록 (확정)
-1. **Google SSO 계정 로그인 연동 및 계정별 서재/단어장 영구 동기화 (최우선 확정 과제):**
-   - 현재 구축된 `x-device-id` 익명 디바이스 격리 브릿지를 Google SSO 계정(`google_user_id`)으로 승격/마이그레이션.
-   - 계정 로그인 시 기존 임시 디바이스 서재 데이터를 내 Google 계정 서재로 자동 병합(Merge).
-   - **계정별 영구 단어장 (Vocabulary Star ★ 저장):**
-     - 문장 카드 내 핵심 단어의 별표(★) 터치 시 내 계정 영구 단어장에 문맥 문장과 함께 저장.
-     - 서재/복습 탭에서 '오늘 복습할 단어' 모아보기 및 간격 반복(SRS) 학습 지원.
-   - **북마크 동기화:** '내일은 여기서부터 시작' 학습 지점이 모든 기기(모바일/태블릿/PC) 간 실시간 동기화.
-
-2. **학습자 음성 녹음 & 원어민 A/B 청취 비교 (Shadowing Evaluator):**
-   - 브라우저 Web Audio API로 마이크 턴 구간에서 학습자 음성을 녹음하고, 원어민 음성과 1:1로 즉각 번갈아 들어보는 AB 청취 모드.
-
-3. **페이지 공유 링크 (URL Hash/Query 파라미터):**
-   - 특정 교재의 문장 위치를 다른 기기나 스터디원에게 바로 공유할 수 있는 딥링크 지원.
+- 🗂️ **[문서 종합 색인 (docs/README.md)](./docs/README.md)**
+- 🔊 **[음성 및 오디오 엔진 설계서 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
+- 🧠 **[튜터 프롬프트 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
+- 📜 **[KST 기준 버전별 무삭제 변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**
+- 🇰🇷 **[한국어 원서 모드 상세 기획 (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
+- 📝 **[한국어 모드 전문가 리뷰 (docs/features/korean-mode-review.md)](./docs/features/korean-mode-review.md)**
+- 🌐 **[다국어 쉐도잉 기능 명세 (docs/features/multilingual-shadowing.md)](./docs/features/multilingual-shadowing.md)**
+- 🛠️ **[장애 분석 및 트러블슈팅 (docs/troubleshooting/incident-analysis.md)](./docs/troubleshooting/incident-analysis.md)**

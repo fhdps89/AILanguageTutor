@@ -3,8 +3,8 @@
 > **문서 버전:** v1.1.0 (리뷰어 피드백 전면 반영판)  
 > **최종 수정일:** 2026-09-29  
 > **상태:** 구현 및 파일럿 검증 (Implementation & Pilot Verification)  
-> **기준 리뷰 문서:** [KOREAN_MODE_REVIEW.md](./KOREAN_MODE_REVIEW.md)  
-> **기존 아키텍처:** [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md)
+> **기준 리뷰 문서:** [korean-mode-review.md](./korean-mode-review.md)  
+> **아키텍처 문서:** [audio-system.md](../architecture/audio-system.md), [tutor-pipeline.md](../architecture/tutor-pipeline.md)
 
 ---
 

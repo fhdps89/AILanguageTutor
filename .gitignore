@@ -8,3 +8,5 @@ cache/*
 !cache/demo-arc/**
 !cache/library.json
 firebase-applet-config.json
+*.log
+

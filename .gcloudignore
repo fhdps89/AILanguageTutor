@@ -1,0 +1,36 @@
+# ==========================================
+# Google Cloud Run / Cloud Build Ignore
+# ==========================================
+.gcloudignore
+.git
+.gitignore
+
+# Deep Archive Documentation (배포 패키지 용량 격리: 32KB 초과 원천 방지)
+docs/
+*.md
+!README.md
+
+# Logs & Diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node & Build Outputs
+node_modules/
+dist/
+coverage/
+
+# OS & Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets & Configs
+.env
+.env.local
+.env.*.local
+firebase-applet-config.json
+
+# Cache files
+cache/tts/

@@ -1,0 +1,81 @@
+# 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
+
+> **공식 기준 빌드:** `build 20260930-gemini-single`  
+> **표준 시간대:** KST (한국 표준시, UTC+9)  
+> **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-10-01 KST] Build `20260930-gemini-single` (계층화 문서화 및 배포 격리 아키텍처 수립)
+- **공식 빌드 버전 동기화:**
+  - 애플리케이션 공식 빌드 버전을 `build 20260930-gemini-single`로 표준 동기화.
+  - 모든 프로젝트 기록 일자를 KST(한국 표준시) 기준으로 통일.
+- **Cloud Run 32KB 배포 에러 원천 해결 (Deployment Isolation):**
+  - `.dockerignore` 및 `.gcloudignore` 격리 설정 도입 (`docs/`, `*.log`, `.git` 배포 패키지 제외).
+  - 루트의 `README.md` 및 `PROJECT_CONTEXT.md`를 5KB 미만 경량 인덱스 문서로 압축 유지.
+  - `docs/` 심층 아카이브 허브 구축 (`architecture/`, `history/`, `features/`, `troubleshooting/`).
+- **문서 이전 및 무삭제 보존:**
+  - 기존 기획 및 리뷰 문서(`KOREAN_LEARNING_SPEC.md`, `KOREAN_MODE_REVIEW.md`)를 `docs/features/`로 안전하게 이전하여 루트 디렉토리 경량화.
+
+---
+
+## [2026-09-30 KST] Build `20260928-multilingual-v7` (한국어 원서 모드 + 보안 강화 완비판)
+
+### 1. 긴급 UX 개선 (한국 시간 9월 30일 반영)
+- **전문 연속 낭독 섹션(`FullPagePlayer`) 하단 재배치:**
+  - 문장별 쉐도잉 훈련 리스트 맨 아래로 이동하여, 개별 문장 카드를 먼저 학습하면서 자연스럽게 오디오 캐시를 생성한 후 페이지 하단에서 끊김 없이 전체 지문을 감상할 수 있도록 UX 흐름 최적화.
+- **오디오 단일 재생 통일:**
+  - 0.75x 및 0.5x 음성을 1.0x와 동일하게 중간 멈춤/반복 없이 1회 깔끔하게 재생하고 끝나는 방식으로 통일.
+
+### 2. 보안 및 인프라 조치
+- **GitHub Secret Scanning 알림 철저 점검 및 조치 완료:**
+  - **원인 파악:** 깃허브 보안 봇이 AI Studio 자동 생성 파일이었던 `firebase-applet-config.json` 내 Web Client 키(`AIzaSy...`)를 기계적으로 감지하여 발송한 알림 확인.
+  - **무결성 검증:** 실제 Gemini API Key 및 결제 시크릿은 서버 환경변수로 관리되어 레포지토리에 전혀 노출되지 않았음을 100% 확인.
+  - **레포지토리 정리:** 불필요했던 `firebase-applet-config.json` 파일을 완전히 제거하고, `.gitignore`에 추가하여 향후 깃 추적 및 노출을 원천 차단.
+
+### 3. 한국어 원서 학습 모드 (K-Language Learning Engine) 구축
+- **Zero Mode Toggle:** 수동 버튼 조작 없이 판독 언어(`language.code === "ko"`)에 따라 자동 카드 레이아웃 전환.
+- **One Phonetic Romanization:** 음운 동화/연음이 반영된 실제 발음 표기 1개만 노출.
+- **Grammatical Chunks:** 조사 및 용언 어미 분해 시각화 (`기업의` ➔ `possessive 의`, `이루어지지 않기` ➔ `이루어지다 + 지 않 + 기`).
+- **Formality Tagging:** 하십시오체/해요체/반말만 선별 표시 (서술체 `-다`는 null로 깔끔하게 정돈).
+- **광학 및 환각 방어:** 뒷면 비침 무시, 각주 별표 제거, 하단 잘린 문장 말줄임표 안전 마감.
+- **빌드 무결성:** `npm run build` 컴파일 무결성 정상 통과.
+
+---
+
+## [2026-09-29 KST] Build `20260928-multilingual-v6`
+- **Gemini Native Speech TTS 도입:**
+  - `gemini-3.8-flash-lite-tts` 모델 적용 (Voice: `Kore`).
+  - 브라우저 WSOLA 왜곡을 없애기 위해 `speechMetadata.style` 프롬프트로 0.75x, 0.5x 네이티브 발화 제어 구현.
+- **오디오 디스크 캐시:**
+  - `cache/tts/[hash].wav` (SHA-256) 저장소 구현. 응답 지연 3ms 달성.
+- **위트 있는 음성 생성 인디케이터:**
+  - `원어민 성우 섭외 중...` ➔ `대본 건네고 발음 조율 중...` ➔ `스튜디오에서 열심히 녹음 중...` ➔ `녹음된 음성 모니터링 중...` 실시간 로테이션 UI 적용.
+
+---
+
+## [2026-09-28 KST] Build `20260927-multilingual-v5`
+- **모바일 환경 최적화:**
+  - `capture="environment"` 모바일 카메라 연동.
+  - 브라우저 캔버스 장변 3,000px 스마트 리사이징 압축 파이프라인.
+  - iOS Safari 백그라운드 재생 방지 단일 Audio 인스턴스 재사용.
+  - 긴 스크롤 방지를 위한 아코디언 토글(구문 분석도, 어휘 목록).
+
+---
+
+## [2026-09-27 KST] 초기 릴리즈 & 프로토타입
+- 다국어 교재 OCR 및 문장 분해 기초 엔진 구현.
+- 개선문(L'Arc de Triomphe) 프랑스어 데모 데이터셋 탑재.
+- 60fps 오디오-텍스트 노래방 싱크 시뮬레이션 엔진 초기 설계.
+
+---
+
+## 🔮 차기 스프린트 (Roadmap)
+1. **Google SSO 계정 로그인 연동 및 계정별 서재/단어장 영구 동기화:**
+   - `x-device-id` 임시 브릿지에서 `google_user_id` 계정 시스템으로 승격.
+   - 계정 로그인 시 기존 임시 디바이스 서재 자동 병합(Merge).
+   - 계정별 영구 단어장 (★ 즐겨찾기) 및 간격 반복(SRS) 학습 지원.
+2. **학습자 음성 녹음 & 원어민 A/B 청취 비교 (Shadowing Evaluator):**
+   - Web Audio API 마이크 녹음 및 원어민 음성 1:1 대조 청취.
+3. **페이지 공유 딥링크 (URL Hash/Query 파라미터):**
+   - 특정 교재 및 문장 위치 공유 링크 지원.

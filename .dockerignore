@@ -1,0 +1,36 @@
+# ==========================================
+# Cloud Run & Docker Build Isolation
+# ==========================================
+
+# Deep Archive Documentation (배포 패키지 용량 격리)
+docs/
+*.md
+!README.md
+
+# Logs & Debugging
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Version Control & IDE
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+.idea/
+.vscode/
+
+# Local Dependencies & Builds
+node_modules/
+dist/
+coverage/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+firebase-applet-config.json
+
+# Cache files (배포 번들에 대용량 음성 캐시 제외)
+cache/tts/
