@@ -32,6 +32,8 @@
   - 기준 빌드 코드 리뷰, 뒷면 비침/각주 방어 및 파일럿 테스트 기준
 - **[다국어 쉐도잉 학습 시나리오 (multilingual-shadowing.md)](./features/multilingual-shadowing.md)**  
   - 외국어 끊어 읽기(Chunking), ASCII 구문 분석도, 어휘 강조, 전체 지문 릴레이 낭독 플로우
+- **[Google SSO & 클라우드 영구 동기화 로드맵 (roadmap-sso.md)](./features/roadmap-sso.md)**  
+  - 차기 최우선 과제: Google 계정 연동, 익명 서재 자동 병합, 영구 단어장(★), A/B Shadowing Evaluator
 
 ### 3. [변경 이력 (History & Changelog)](./history/)
 - **[KST 기준 버전별 전체 변경 이력 (changelog.md)](./history/changelog.md)**  

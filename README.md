@@ -69,5 +69,6 @@ PORT=3000
 - 🔊 **[오디오 & 음성 엔진 설계서 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
 - 🧠 **[튜터 프롬프트 파이프라인 설계서 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
 - 🇰🇷 **[한국어 원서 학습 모드 기획서 (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
+- 🚀 **[Google SSO & 클라우드 영구 동기화 로드맵 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
 - 📜 **[KST 기준 버전별 변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**
 - 🛠️ **[장애 분석 및 트러블슈팅 사례 (docs/troubleshooting/incident-analysis.md)](./docs/troubleshooting/incident-analysis.md)**
