@@ -13,10 +13,10 @@ interface UploadSectionProps {
 }
 
 /**
- * Optimizes image client-side to max 3000px on the longest dimension
- * Preserves ultra-high OCR resolution while preventing 15MB+ network bottlenecks
+ * Optimizes image client-side to max 2500px on the longest dimension
+ * Preserves ultra-high OCR resolution while preventing mobile memory bottlenecks
  */
-export async function optimizeImageForOcr(file: File, maxDim = 3000): Promise<File> {
+export async function optimizeImageForOcr(file: File, maxDim = 2500): Promise<File> {
   return new Promise((resolve) => {
     // If small enough (< 2MB) and JPEG, return original
     if (file.size < 2 * 1024 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/jpg')) {
@@ -91,7 +91,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const handleProcessFile = async (rawFile: File) => {
-    const optimized = await optimizeImageForOcr(rawFile, 3000);
+    const optimized = await optimizeImageForOcr(rawFile, 2500);
     onFileSelect(optimized);
   };
 

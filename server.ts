@@ -204,7 +204,7 @@ app.use('/api/', generalLimiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit for high-res mobile photos
 });
 
 // Cache API key lookup at startup
@@ -458,18 +458,94 @@ function normalizePage(data: any): any {
 }
 
 function extractJson(text: string): any {
-  const trimmed = text.trim();
+  if (!text || typeof text !== 'string') {
+    throw new Error('Empty text from Gemini response');
+  }
+
+  let trimmed = text.trim();
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  let jsonStr = fenceMatch ? fenceMatch[1] : trimmed;
-  if (!fenceMatch) {
-    const start = jsonStr.indexOf('{');
-    const end = jsonStr.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      jsonStr = jsonStr.substring(start, end + 1);
+  if (fenceMatch) {
+    trimmed = fenceMatch[1].trim();
+  }
+
+  // Find start and end of outer JSON object
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    trimmed = trimmed.substring(start, end + 1);
+  }
+
+  // Attempt 1: Direct JSON.parse
+  try {
+    const parsed = JSON.parse(trimmed);
+    return normalizePage(parsed);
+  } catch (err1: any) {
+    // Attempt 2: Sanitize unescaped control characters and raw newlines inside string literals
+    try {
+      let inString = false;
+      let escaped = false;
+      let sanitized = '';
+      for (let i = 0; i < trimmed.length; i++) {
+        const c = trimmed[i];
+        if (c === '"' && !escaped) {
+          inString = !inString;
+          sanitized += c;
+        } else if (inString) {
+          if (c === '\n') sanitized += '\\n';
+          else if (c === '\r') sanitized += '\\r';
+          else if (c === '\t') sanitized += '\\t';
+          else if (c.charCodeAt(0) < 0x20) {
+            sanitized += ' ';
+          } else {
+            sanitized += c;
+          }
+        } else {
+          sanitized += c;
+        }
+        escaped = c === '\\' && !escaped;
+      }
+      // Remove trailing commas before } or ]
+      sanitized = sanitized.replace(/,\s*([}\]])/g, '$1');
+      const parsed = JSON.parse(sanitized);
+      return normalizePage(parsed);
+    } catch (err2: any) {
+      // Attempt 3: Truncated JSON recovery (if token limit cut off the response)
+      try {
+        const lastBrace = trimmed.lastIndexOf('}');
+        if (lastBrace > 0) {
+          let candidate = trimmed.substring(0, lastBrace + 1);
+          candidate = candidate.replace(/,\s*$/, '');
+          let openBrackets = 0;
+          let openBraces = 0;
+          let inStr = false;
+          let esc = false;
+          for (let i = 0; i < candidate.length; i++) {
+            const ch = candidate[i];
+            if (ch === '"' && !esc) inStr = !inStr;
+            else if (!inStr) {
+              if (ch === '[') openBrackets++;
+              else if (ch === ']') openBrackets--;
+              else if (ch === '{') openBraces++;
+              else if (ch === '}') openBraces--;
+            }
+            esc = ch === '\\' && !esc;
+          }
+          if (inStr) candidate += '"';
+          while (openBrackets > 0) {
+            candidate += ']';
+            openBrackets--;
+          }
+          while (openBraces > 0) {
+            candidate += '}';
+            openBraces--;
+          }
+          const parsed = JSON.parse(candidate);
+          return normalizePage(parsed);
+        }
+      } catch (err3: any) {}
+      throw err1;
     }
   }
-  const parsed = JSON.parse(jsonStr);
-  return normalizePage(parsed);
 }
 
 // In-Flight TTS Deduplication Map
@@ -894,7 +970,21 @@ app.get('/api/tts', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Request, res: Response) => {
+app.post(
+  '/api/analyze',
+  analyzeLimiter,
+  (req: Request, res: Response, next) => {
+    upload.single('photo')(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: '사진 파일 크기가 30MB를 초과했습니다. 더 작은 크기의 사진으로 올려주세요.' });
+        }
+        return res.status(400).json({ error: `사진 업로드 오류: ${err.message}` });
+      }
+      next();
+    });
+  },
+  async (req: Request, res: Response) => {
   try {
     let imageBuffer: Buffer | null = null;
 
@@ -944,22 +1034,23 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
 
     const base64Image = imageBuffer.toString('base64');
     const primaryModel = process.env.VISION_MODEL || 'gemini-3.8-flash';
-    const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']));
+    const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash']));
     const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
+    const imageMime = req.file?.mimetype && req.file.mimetype.startsWith('image/') ? req.file.mimetype : 'image/jpeg';
 
     let pageData: any = null;
     let lastError: any = null;
 
     for (const modelCandidate of fallbackModels) {
       try {
-        console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate}`);
+        console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate} (${imageMime})`);
         const response = await ai.models.generateContent({
           model: modelCandidate,
           contents: [
             { text: prompt },
             {
               inlineData: {
-                mimeType: 'image/jpeg',
+                mimeType: imageMime,
                 data: base64Image,
               },
             },
@@ -967,6 +1058,7 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
           config: {
             responseMimeType: 'application/json',
             temperature: 0,
+            maxOutputTokens: 8192,
           },
         });
 
@@ -1031,6 +1123,21 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
       return res.status(429).json({ error: err.message, code: err.code });
     }
     console.error('Analyze error:', err);
+    try {
+      const errLog = `[${new Date().toISOString()}] Analyze error: ${err?.stack || err?.message || err}\n`;
+      fs.appendFileSync(path.join(CACHE_DIR, 'server_errors.log'), errLog, 'utf-8');
+    } catch {}
+
+    const errMsg = String(err?.message || '');
+    if (errMsg.includes('SAFETY') || errMsg.includes('blocked')) {
+      return res.status(400).json({ error: '사진 내용이 안전 기준에 의해 분석되지 못했습니다. 다른 사진으로 시도해 주세요.' });
+    }
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('429')) {
+      return res.status(429).json({ error: 'Gemini 모델 일일 호출 한도에 도달했습니다. 잠시 후 또는 내일 다시 시도해 주세요.' });
+    }
+    if (errMsg.includes('File too large') || errMsg.includes('LIMIT_FILE_SIZE')) {
+      return res.status(400).json({ error: '사진 파일 크기가 너무 큽니다. 더 작은 크기의 사진으로 올려주세요.' });
+    }
     res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
