@@ -1,6 +1,6 @@
 # AI 어학 튜터 (AI Language Tutor) — 프로젝트 컨텍스트
 
-> **공식 빌드 버전:** `build 20260930-gemini-single`  
+> **공식 빌드 버전:** `build 20261004-multilingual-v2`  
 > **최신 업데이트 일자:** 2026-10-04 (KST)  
 > **공식 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)  
 > **아키텍처 표준:** 계층화 문서화 및 배포 격리 아키텍처 (루트 문서 5KB 미만 유지, 모든 기록 일자 KST 기준)

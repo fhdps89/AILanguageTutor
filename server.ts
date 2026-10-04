@@ -20,7 +20,7 @@ const DEMO_JSON_PATH = path.join(APP_DIR, 'demo_page.json');
 const DEMO_CHINESE_JSON_PATH = path.join(APP_DIR, 'demo_chinese.json');
 const LIBRARY_PATH = path.join(CACHE_DIR, 'library.json');
 const TTS_CACHE_DIR = path.join(CACHE_DIR, 'tts');
-const BUILD_VERSION = '20260930-gemini-single';
+const BUILD_VERSION = '20261004-multilingual-v2';
 
 // Ensure required directories exist
 if (!fs.existsSync(CACHE_DIR)) {

@@ -20,7 +20,7 @@ export const Header: React.FC<HeaderProps> = ({ build }) => {
             <span className="text-xs font-mono text-slate-500">build {build}</span>
           </div>
           <p className="text-sm text-slate-600 mt-0.5">
-            어떤 외국어든 책·교재 사진 한 장 → 언어 자동 판독 & 원어 음성 쉐도잉 학습 (영어·프랑스어·일본어·스페인어·독일어 등)
+            어떤 외국어든 책·교재 사진 한 장 → 언어 자동 판독 & 원어 음성 쉐도잉 학습 (중국어·프랑스어·영어·일본어·스페인어·독일어 등)
           </p>
         </div>
       </div>

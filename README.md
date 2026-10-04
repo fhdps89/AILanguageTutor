@@ -1,6 +1,6 @@
 # AI 다국어 쉐도잉 튜터 (AI Multilingual Language Tutor)
 
-> **공식 빌드 버전:** `build 20260930-gemini-single`  
+> **공식 빌드 버전:** `build 20261004-multilingual-v2`  
 > **최신 업데이트 일자:** 2026-10-04 (KST)  
 > **라이브 서비스:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
 
