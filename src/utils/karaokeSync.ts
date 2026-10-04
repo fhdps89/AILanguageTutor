@@ -22,6 +22,30 @@ export interface KaraokeTimeline {
 
 const timelineCache = new Map<string, KaraokeTimeline>();
 
+function tokenizeKaraokeText(text: string): string[] {
+  const hasHanzi = /[\u4e00-\u9fa5]/.test(text);
+  if (!hasHanzi) {
+    return text.split(/(\s+|[.,!?:;«»"“”()]+)/).filter((t) => t.length > 0);
+  }
+
+  // Tokenize Chinese text preserving exact string and characters
+  const tokens: string[] = [];
+  const regex = /([\u4e00-\u9fa5]|[a-zA-Z0-9]+|[，。！？、“”、《》（）…—·；：\s+|.,!?:;«»"“”()\-]+|[^\u4e00-\u9fa5a-zA-Z0-9，。！？、“”、《》（）…—·；：\s.,!?:;«»"“”()\-]+)/gu;
+  let match;
+  let lastIndex = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push(text.slice(lastIndex, match.index));
+    }
+    tokens.push(match[0]);
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    tokens.push(text.slice(lastIndex));
+  }
+  return tokens.filter((t) => t.length > 0);
+}
+
 /**
  * Builds an acoustically-weighted timeline for exact speech sync.
  */
@@ -36,9 +60,8 @@ export function buildKaraokeTimeline(text: string, duration: number): KaraokeTim
     return timelineCache.get(cacheKey)!;
   }
 
-  // Tokenize preserving spaces and punctuation
-  const rawTokens = text.split(/(\s+|[.,!?:;«»"“”()]+)/);
-  const validTokens = rawTokens.filter((t) => t.length > 0);
+  // Tokenize preserving spaces and punctuation (with Chinese CJK character-level support)
+  const validTokens = tokenizeKaraokeText(text);
 
   // Neural TTS speech has ~140ms onset lead-in and ~220ms release tail
   const leadIn = Math.min(0.16, duration * 0.05);
@@ -64,28 +87,34 @@ export function buildKaraokeTimeline(text: string, duration: number): KaraokeTim
     charPos = endIndex;
 
     const trimmed = token.trim();
-    const isWord = /[\p{L}\p{N}]/u.test(trimmed);
+    const isWord = /[\p{L}\p{N}\u4e00-\u9fa5]/u.test(trimmed);
 
     let weight = 0;
     let pauseWeight = 0;
 
     if (isWord) {
-      // 1. Numbers / Years expanded acoustic duration (e.g. 1805 -> 'mil huit cent cinq')
+      // 1. Chinese Hanzi character (Syllable-timed, ~2.0 weight per Hanzi character)
+      const hanziCount = (trimmed.match(/[\u4e00-\u9fa5]/g) || []).length;
+      if (hanziCount > 0) {
+        weight += hanziCount * 2.1;
+      }
+
+      // 2. Numbers / Years expanded acoustic duration (e.g. 1805 -> 'mil huit cent cinq')
       const digitCount = (trimmed.match(/\d/g) || []).length;
       if (digitCount > 0) {
         weight += digitCount * 3.6;
       }
 
-      // 2. Roman numerals & abbreviations (e.g. Ier, XIX)
+      // 3. Roman numerals & abbreviations (e.g. Ier, XIX)
       if (/^[IVXLCDM]+(er|e|ème)?$/i.test(trimmed)) {
         weight += 6.2;
       }
 
-      // 3. Phonetic character density with vowel duration weighting
+      // 4. Phonetic character density with vowel duration weighting for Latin/Alphabet words
       for (const char of trimmed) {
         if (/[aeiouyéèêëàâäôöûüùîïœæáíóúñ]/i.test(char)) {
           weight += 1.35; // Vowel nucleus carries acoustic length
-        } else if (/[\p{L}]/u.test(char)) {
+        } else if (/[\p{L}]/u.test(char) && !/[\u4e00-\u9fa5]/.test(char)) {
           weight += 0.92; // Consonants
         }
       }
@@ -93,16 +122,16 @@ export function buildKaraokeTimeline(text: string, duration: number): KaraokeTim
       // Minimum duration for monosyllabic particles (e.g. 'de', 'un', 'in')
       weight = Math.max(1.8, weight);
 
-      // Check following token for breathing/clause pauses
+      // Check following token for breathing/clause pauses (supporting CJK punctuation)
       const nextToken = validTokens[i + 1] || '';
-      if (/[,—\-]/.test(nextToken)) {
-        pauseWeight = 3.0; // Comma pause ~200ms
-      } else if (/[:;]/.test(nextToken)) {
+      if (/[,—\-，、]/.test(nextToken)) {
+        pauseWeight = 3.0; // Comma / Dunhao pause ~200ms
+      } else if (/[:;：；]/.test(nextToken)) {
         pauseWeight = 3.8; // Colon/semicolon pause ~250ms
-      } else if (/[.!?]/.test(nextToken)) {
+      } else if (/[.!?。！？]/.test(nextToken)) {
         pauseWeight = 5.5; // Sentence end pause ~360ms
       } else {
-        pauseWeight = 0.5; // Standard word transition
+        pauseWeight = 0.4; // Standard word transition
       }
     }
 

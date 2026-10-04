@@ -17,6 +17,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const APP_DIR = process.cwd();
 const CACHE_DIR = process.env.FRENCH_TUTOR_CACHE || path.join(APP_DIR, 'cache');
 const DEMO_JSON_PATH = path.join(APP_DIR, 'demo_page.json');
+const DEMO_CHINESE_JSON_PATH = path.join(APP_DIR, 'demo_chinese.json');
 const LIBRARY_PATH = path.join(CACHE_DIR, 'library.json');
 const TTS_CACHE_DIR = path.join(CACHE_DIR, 'tts');
 const BUILD_VERSION = '20260930-gemini-single';
@@ -286,7 +287,25 @@ CRITICAL RULES:
      * "vocabulary": Array of { "word", "meaning" (English), "baseForm", "pos", "hint" }.
      * STRICT OPTICAL DEFENSE: Ignore faint bleed-through text from reverse side; strip footnote asterisks; if the last sentence is cut off, transcribe only visible text with ellipsis.
 
-3. CASE B: FOREIGN SOURCE TEXT (Learning Foreign language for Korean learners):
+3. CASE B: CHINESE SOURCE TEXT (Learning Chinese for Korean learners):
+   - If the source is Chinese ('zh-CN', 'zh-TW', 'zh'):
+     * "language": { "code": "zh-CN", "name_ko": "중국어", "name_en": "Chinese", "flag": "🇨🇳" }
+     * "raw_text": Verbatim Chinese characters from the document/book.
+     * "tts_text": Spoken form in Mandarin Chinese.
+     * "pinyin": Full Hanyu Pinyin with standard tone marks (e.g., "Běijīng gùgōng shì shìjiè shàng..."). Accurately transcribe tones.
+     * "translation": Natural, fluent, and idiomatic Korean translation.
+     * "breath_marks": The original Chinese sentence with "/" inserted at natural breath/thought group pauses.
+     * "syntax_diagram": ASCII chunk breakdown diagram explaining sentence structure in Korean (e.g. [주어 主语] + [부사어 状语] + [술어 谓语] + [목적어 宾语]).
+     * "pronunciation_hint": Tone sandhi tips (e.g., "3성+3성 연속 시 앞 2성 변조", "不/一 성조 변화", "권설음 zh/ch/sh/r", "경성 처리").
+     * "vocabulary": Key vocabulary words with:
+       - "word": Chinese character(s)
+       - "pinyin": Hanyu Pinyin with tone marks
+       - "meaning": Korean meaning
+       - "baseForm": dictionary entry
+       - "pos": Part of speech
+       - "hint": Pronunciation/tone hint
+
+4. CASE C: OTHER FOREIGN SOURCE TEXT (French, English, Japanese, German, Spanish, etc.):
    - If the source is French, English, Japanese, German, Spanish, etc.:
      * "translation": Natural and accurate Korean translation.
      * "breath_marks": The original sentence with "/" inserted at natural breath pauses/thought groups.
@@ -294,7 +313,7 @@ CRITICAL RULES:
      * "pronunciation_hint": Language-appropriate phonetics/rhythm/intonation tips.
      * "vocabulary": Key vocabulary words with Korean meanings.
 
-4. STRUCTURE:
+5. STRUCTURE:
    - First sentence id MUST be "s00" (title/headline if present; if no distinct header, start directly with "s01").
    - Spoken expansions belong in "tts_text" and "full_tts_script".
    - Return ONLY a valid JSON object matching the schema below. No markdown fences.
@@ -302,10 +321,10 @@ CRITICAL RULES:
 Schema:
 {
   "language": {
-    "code": "BCP-47 code (e.g. 'ko', 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE', 'zh-CN')",
-    "name_ko": "Language name in Korean (e.g. '한국어', '영어', '프랑스어', '일본어')",
-    "name_en": "Language name in English (e.g. 'Korean', 'English', 'French', 'Japanese')",
-    "flag": "Flag emoji (e.g. '🇰🇷', '🇺🇸', '🇫🇷', '🇯🇵')"
+    "code": "BCP-47 code (e.g. 'zh-CN', 'ko', 'en-US', 'fr-FR', 'ja-JP', 'es-ES', 'de-DE')",
+    "name_ko": "Language name in Korean (e.g. '중국어', '한국어', '영어', '프랑스어', '일본어')",
+    "name_en": "Language name in English (e.g. 'Chinese', 'Korean', 'English', 'French', 'Japanese')",
+    "flag": "Flag emoji (e.g. '🇨🇳', '🇰🇷', '🇺🇸', '🇫🇷', '🇯🇵')"
   },
   "title": "Title of the page/article in the original language",
   "full_tts_script": "Full verbatim text in the original language for continuous listening",
@@ -315,6 +334,7 @@ Schema:
       "id": "s01",
       "raw_text": "Original text in the detected language",
       "tts_text": "Spoken form in the detected language",
+      "pinyin": "Hanyu Pinyin with tone marks (Chinese mode only)",
       "translation": "Natural translation (English if Korean source; Korean if foreign source)",
       "sound_romanization": "Phonetic spoken romanization (Korean mode only)",
       "korean_chunks": [
@@ -323,9 +343,9 @@ Schema:
       "formality_badge": null,
       "breath_marks": "Original text / with natural breath / pause markers",
       "syntax_diagram": "[주어] [동사구] [수식어] ASCII 구문 분석도",
-      "pronunciation_hint": "발음/연음 팁",
+      "pronunciation_hint": "발음/성조/연음 팁",
       "vocabulary": [
-        { "word": "word", "meaning": "뜻", "baseForm": "기본형", "pos": "품사", "hint": "발음힌트" }
+        { "word": "word", "pinyin": "병음(중국어)", "meaning": "뜻", "baseForm": "기본형", "pos": "품사", "hint": "발음힌트" }
       ]
     }
   ]
@@ -383,6 +403,7 @@ function normalizePage(data: any): any {
     const pron = String(s.pronunciation_hint || s.phonetics || s.sound_tips || '').trim();
     const liaison = String(s.liaison_hint || s.liaison || '').trim();
     const roman = s.sound_romanization ? String(s.sound_romanization).trim() : undefined;
+    const pinyin = s.pinyin ? String(s.pinyin).trim() : undefined;
     const formality = s.formality_badge ? String(s.formality_badge).trim() : null;
 
     let chunks: any[] = [];
@@ -401,6 +422,7 @@ function normalizePage(data: any): any {
         baseForm: v.baseForm ? String(v.baseForm).trim() : undefined,
         pos: v.pos ? String(v.pos).trim() : undefined,
         hint: v.hint ? String(v.hint).trim() : undefined,
+        pinyin: v.pinyin ? String(v.pinyin).trim() : undefined,
       })).filter((v: any) => v.word);
     }
 
@@ -410,6 +432,7 @@ function normalizePage(data: any): any {
       tts_text: tts,
       translation: trans,
       sound_romanization: roman,
+      pinyin,
       korean_chunks: chunks.length > 0 ? chunks : undefined,
       formality_badge: formality,
       breath_marks: breath,
@@ -420,8 +443,13 @@ function normalizePage(data: any): any {
     };
   }).filter((s: any) => s.raw_text.length > 0);
 
+  let lang = data.language || { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' };
+  if (lang && (lang.code === 'zh' || lang.code?.startsWith('zh-') || lang.name_ko?.includes('중국어') || lang.name_en?.toLowerCase().includes('chinese'))) {
+    lang = { code: 'zh-CN', name_ko: '중국어', name_en: 'Chinese', flag: '🇨🇳' };
+  }
+
   return {
-    language: data.language || { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' },
+    language: lang,
     title: data.title || '학습 교재',
     full_tts_script: data.full_tts_script || cleaned.map((s: any) => s.tts_text || s.raw_text).join(' '),
     disclaimer_ko: data.disclaimer_ko || '음성은 합성 TTS이며 원어민이 아닙니다. 발음 표기는 학습용 보조 힌트입니다.',
@@ -526,9 +554,18 @@ async function generateGeminiSpeech(
   const speechPromise = (async () => {
     try {
       const langLabel = langName ? `native ${langName}` : 'native';
+      const isChinese = /chinese|zh|중국어/i.test(langLabel) || /[\u4e00-\u9fa5]/.test(cleanText);
       let promptStyle = '';
 
-      if (normalizedSpeed === '0.5') {
+      if (isChinese) {
+        if (normalizedSpeed === '0.5') {
+          promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, articulating standard Mandarin Chinese (Putonghua) with crystal-clear four tones (1st, 2nd, 3rd, 4th tones and neutral tone) and distinct pauses between thought groups.`;
+        } else if (normalizedSpeed === '0.75') {
+          promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in standard Mandarin Chinese with accurate tonal contours and natural rhythm.`;
+        } else {
+          promptStyle = `Natural, articulate, and expressive standard Mandarin Chinese speaker with authentic Beijing/Standard pronunciation, proper tones, and natural sentence cadence.`;
+        }
+      } else if (normalizedSpeed === '0.5') {
         promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, carefully pronouncing every single phoneme in authentic ${langLabel}, with clear pauses between thought groups.`;
       } else if (normalizedSpeed === '0.75') {
         promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in authentic ${langLabel}.`;
@@ -601,10 +638,17 @@ app.get('/api/status', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/api/demo', async (_req: Request, res: Response) => {
-  const demoPath = fs.existsSync(path.join(CACHE_DIR, 'demo-arc', 'page.json'))
-    ? path.join(CACHE_DIR, 'demo-arc', 'page.json')
-    : DEMO_JSON_PATH;
+app.get('/api/demo', async (req: Request, res: Response) => {
+  const langQuery = String(req.query.lang || '').toLowerCase();
+  const isChinese = langQuery === 'zh' || langQuery === 'zh-cn' || langQuery === 'chinese';
+
+  const demoPath = isChinese
+    ? (fs.existsSync(path.join(CACHE_DIR, 'demo-chinese', 'page.json'))
+        ? path.join(CACHE_DIR, 'demo-chinese', 'page.json')
+        : DEMO_CHINESE_JSON_PATH)
+    : (fs.existsSync(path.join(CACHE_DIR, 'demo-arc', 'page.json'))
+        ? path.join(CACHE_DIR, 'demo-arc', 'page.json')
+        : DEMO_JSON_PATH);
 
   if (!fs.existsSync(demoPath)) {
     return res.status(404).json({ error: 'Demo file not found' });
@@ -613,12 +657,15 @@ app.get('/api/demo', async (_req: Request, res: Response) => {
   try {
     const raw = await fs.promises.readFile(demoPath, 'utf-8');
     const data = JSON.parse(raw);
+    const key = isChinese ? 'demo-chinese' : 'demo-arc';
     if (!data.language) {
-      data.language = { code: 'fr-FR', name_ko: '프랑스어', name_en: 'French', flag: '🇫🇷' };
+      data.language = isChinese
+        ? { code: 'zh-CN', name_ko: '중국어', name_en: 'Chinese', flag: '🇨🇳' }
+        : { code: 'fr-FR', name_ko: '프랑스어', name_en: 'French', flag: '🇫🇷' };
     }
 
     res.json({
-      key: 'demo-arc',
+      key,
       page: data,
       photoUrl: null,
     });
@@ -633,12 +680,33 @@ app.get('/api/library', async (req: Request, res: Response) => {
   const callerOwnerId = getOwnerId(req);
   const fullLib = await loadLibraryAsync();
 
-  // Return public demo-arc + lessons owned by this specific device/user
+  // Return public demos (demo-arc, demo-chinese) + lessons owned by this specific device/user
   const userLib = fullLib.filter((item) => {
-    if (item.key === 'demo-arc') return true;
+    if (item.key === 'demo-arc' || item.key === 'demo-chinese') return true;
     if (!item.ownerId) return false; // Legacy unassigned items hidden for privacy
     return item.ownerId === callerOwnerId;
   });
+
+  // Ensure demo-chinese is in library list
+  const hasChineseDemo = userLib.some((i) => i.key === 'demo-chinese');
+  if (!hasChineseDemo && fs.existsSync(DEMO_CHINESE_JSON_PATH)) {
+    try {
+      const cRaw = fs.readFileSync(DEMO_CHINESE_JSON_PATH, 'utf-8');
+      const cData = JSON.parse(cRaw);
+      userLib.unshift({
+        key: 'demo-chinese',
+        title: '北京故宫：六百年的紫禁城',
+        book_title: '北京故宫 (자금성)',
+        page_no: 1,
+        created_at: '2026-10-04T00:00:00.000Z',
+        source: 'demo',
+        n_sentences: cData.sentences?.length || 6,
+        saved_at: '2026-10-04T00:00:00.000Z',
+        language: cData.language,
+        ownerId: 'system',
+      });
+    } catch {}
+  }
 
   res.json(userLib);
 });
@@ -647,6 +715,20 @@ app.get('/api/library', async (req: Request, res: Response) => {
 app.get('/api/lesson/:key', async (req: Request, res: Response) => {
   const rawKey = Array.isArray(req.params.key) ? req.params.key[0] : req.params.key;
   const safeKey = String(rawKey || '').replace(/[^a-zA-Z0-9_-]/g, '');
+
+  if (safeKey === 'demo-chinese') {
+    const chinesePath = fs.existsSync(path.join(CACHE_DIR, 'demo-chinese', 'page.json'))
+      ? path.join(CACHE_DIR, 'demo-chinese', 'page.json')
+      : DEMO_CHINESE_JSON_PATH;
+    if (fs.existsSync(chinesePath)) {
+      try {
+        const raw = await fs.promises.readFile(chinesePath, 'utf-8');
+        const page = JSON.parse(raw);
+        return res.json({ key: 'demo-chinese', page, photoUrl: null });
+      } catch {}
+    }
+  }
+
   const lessonFolder = path.join(CACHE_DIR, safeKey);
   const pagePath = path.join(lessonFolder, 'page.json');
 
@@ -655,7 +737,7 @@ app.get('/api/lesson/:key', async (req: Request, res: Response) => {
   }
 
   // Security check: non-demo lessons must match owner
-  if (safeKey !== 'demo-arc') {
+  if (safeKey !== 'demo-arc' && safeKey !== 'demo-chinese') {
     const callerOwnerId = getOwnerId(req);
     const fullLib = await loadLibraryAsync();
     const item = fullLib.find((l) => l.key === safeKey);
@@ -689,8 +771,8 @@ app.delete('/api/lesson/:key', async (req: Request, res: Response) => {
     return res.status(400).json({ error: '유효하지 않은 키입니다.' });
   }
 
-  if (safeKey === 'demo-arc') {
-    return res.status(403).json({ error: '기본 데모 교재(demo-arc)는 삭제할 수 없습니다.' });
+  if (safeKey === 'demo-arc' || safeKey === 'demo-chinese') {
+    return res.status(403).json({ error: '기본 데모 교재는 삭제할 수 없습니다.' });
   }
 
   const callerOwnerId = getOwnerId(req);

@@ -39,6 +39,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const pronHint = sentence.pronunciation_hint || sentence.liaison_hint;
   const isFrench = (language?.code || '').startsWith('fr');
   const isKoreanMode = (language?.code || '').startsWith('ko');
+  const isChineseMode = (language?.code || '').startsWith('zh');
 
   const handlePlayRate = (rate: 1.0 | 0.75 | 0.5) => {
     // If currently playing or preparing this exact rate, toggle stop
@@ -264,10 +265,20 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           )}
         </p>
 
+        {/* Chinese Pinyin with Tones */}
+        {isChineseMode && sentence.pinyin && (
+          <div className="mt-2 flex items-start gap-2 text-xs sm:text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
+            <span className="font-bold text-amber-800 text-[11px] shrink-0 mt-0.5">🇨🇳 한어병음:</span>
+            <span className="tracking-wide leading-relaxed text-slate-800 font-medium">{sentence.pinyin}</span>
+          </div>
+        )}
+
         {/* Pronunciation / liaison hint */}
         {pronHint && (
           <div className="mt-2 inline-flex items-center gap-1 text-xs text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
-            <span className="font-bold text-amber-800">{isFrench ? '🗣️ 연음' : '🗣️ 발음'}:</span>
+            <span className="font-bold text-amber-800">
+              {isFrench ? '🗣️ 연음' : isChineseMode ? '🗣️ 성조/발음 팁' : '🗣️ 발음'}:
+            </span>
             <span>{pronHint}</span>
           </div>
         )}
@@ -326,7 +337,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                 : 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50/70'
             }`}
-            title="초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 1회 청취"
+            title={
+              isChineseMode
+                ? '초급자를 위한 한 음소 및 성조(1~4성) 정밀 발화(0.5x)로 1회 청취'
+                : '초급자를 위한 한 음소씩 또박또박 정밀 조음(0.5x)으로 1회 청취'
+            }
           >
             {activePlayRate === 0.5 && !preparingMessage ? (
               <Pause className="h-3.5 w-3.5" />
@@ -398,7 +413,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         <div className="mb-3 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
           <div className="flex items-center justify-between gap-1 mb-1.5">
             <span className="text-[11px] font-bold text-slate-600">
-              호흡 단위 끊어 읽기 (/ 터치하여 부분 청취):
+              {isChineseMode
+                ? '성조·의미 청크 끊어 읽기 (/ 터치하여 부분 청취):'
+                : '호흡 단위 끊어 읽기 (/ 터치하여 부분 청취):'}
             </span>
           </div>
 
@@ -500,6 +517,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                         <span className="font-semibold text-slate-900 font-serif">
                           {v.word}
                         </span>
+                        {v.pinyin && (
+                          <span className="text-[11px] text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded font-mono font-medium border border-amber-200/80">
+                            {v.pinyin}
+                          </span>
+                        )}
                         {v.baseForm && v.baseForm !== v.word && (
                           <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100 font-mono">
                             원형: {v.baseForm}

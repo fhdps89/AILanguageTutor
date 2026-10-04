@@ -1,0 +1,246 @@
+{
+  "language": {
+    "code": "zh-CN",
+    "name_ko": "중국어",
+    "name_en": "Chinese",
+    "flag": "🇨🇳"
+  },
+  "title": "北京故宫：六百年的紫禁城",
+  "full_tts_script": "北京故宫。北京故宫是世界上现存规模最大、保存最为完整的木质结构古建筑群之一。它始建于明代永乐四年，前后历时十四年才最终落成。紫禁城不仅见证了明清两代二十四位皇帝的兴衰历史，更是中华灿烂文明的象征。红墙金瓦在阳光下交相辉映，展现出中国古典宫殿建筑无与伦比的宏伟与庄严。漫步在宽阔的太和殿广场上，人们仿佛能够穿透历史的风烟，倾听岁月的回响。",
+  "disclaimer_ko": "음성은 합성 TTS이며 원어민이 아닙니다. 병음 표기는 학습용 보조 힌트입니다.",
+  "sentences": [
+    {
+      "id": "s00",
+      "raw_text": "北京故宫",
+      "tts_text": "北京故宫",
+      "pinyin": "Běijīng Gùgōng",
+      "translation": "베이징 고궁 (자금성 - 제목)",
+      "breath_marks": "北京故宫",
+      "syntax_diagram": "[제목] 北京故宫 (고유명사)",
+      "pronunciation_hint": "Běijīng (3성+1성): Běi는 반3성 또는 완전한 3성으로 내렸다가 jīng을 높고 평평하게 발음.",
+      "vocabulary": [
+        {
+          "word": "故宫",
+          "pinyin": "gùgōng",
+          "meaning": "고궁 (자금성의 공식 명칭)",
+          "pos": "명사",
+          "hint": "[~ 구궁] 4성 + 1성"
+        }
+      ]
+    },
+    {
+      "id": "s01",
+      "raw_text": "北京故宫是世界上现存规模最大、保存最为完整的木质结构古建筑群之一。",
+      "tts_text": "北京故宫是世界上现存规模最大、保存最为完整的木质结构古建筑群之一。",
+      "pinyin": "Běijīng Gùgōng shì shìjiè shàng xiàncún guīmó zuì dà, bǎocún zuìwéi wánzhěng de mùzhì jiégòu gǔ jiànzhùqún zhī yī.",
+      "translation": "베이징 고궁은 세계에서 현존하는 규모가 가장 크고 보존이 가장 완벽한 목조 고건축물 군 중 하나이다.",
+      "breath_marks": "北京故宫 / 是世界上现存规模最大、/ 保存最为完整的 / 木质结构古建筑群之一。",
+      "syntax_diagram": "北京故宫 [주어] + 是 [술어 동사] + [목적어 수식: 世界上现存规模最大 …] + 之一 [목적어 중심어]",
+      "pronunciation_hint": "规模最大 (guīmó zuì dà): dà는 강하고 똑 떨어지는 4성. '之一(zhī yī)'는 권설음 zh에 유의하여 혀끝을 입천장 뒤쪽에 가볍게 대고 발음.",
+      "vocabulary": [
+        {
+          "word": "现存",
+          "pinyin": "xiàncún",
+          "meaning": "현존하다",
+          "pos": "동사",
+          "hint": "4성 + 2성"
+        },
+        {
+          "word": "规模",
+          "pinyin": "guīmó",
+          "meaning": "규모",
+          "pos": "명사",
+          "hint": "1성 + 2성"
+        },
+        {
+          "word": "完整",
+          "pinyin": "wánzhěng",
+          "meaning": "완전하다/온전하다",
+          "pos": "형용사",
+          "hint": "2성 + 3성"
+        },
+        {
+          "word": "木质结构",
+          "pinyin": "mùzhì jiégòu",
+          "meaning": "목조 구조",
+          "pos": "명사",
+          "hint": "4성 + 4성 + 2성 + 4성"
+        }
+      ]
+    },
+    {
+      "id": "s02",
+      "raw_text": "它始建于明代永乐四年，前后历时十四年才最终落成。",
+      "tts_text": "它始建于明代永乐四年，前后历时十四年才最终落成。",
+      "pinyin": "Tā shǐjiàn yú Míngdài Yǒnglè sì nián, qiánhòu lìshí shísì nián cái zuìzhōng luòchéng.",
+      "translation": "명나라 영락 4년에 짓기 시작하여, 무려 14년의 세월이 걸려서야 비로소 완공되었다.",
+      "breath_marks": "它始建于明代永乐四年，/ 前后历时十四年 / 才最终落成。",
+      "syntax_diagram": "它 [주어] + 始建于 [술어+전치사구] + 前后历时十四年 [시간 부사구] + 才 [부사] + 最终落成 [결과 술어]",
+      "pronunciation_hint": "十四 (shísì)와 四十 (sìshí) 발음 구분: shí는 혀를 마는 2성, sì는 혀를 펴는 4성 치음.",
+      "vocabulary": [
+        {
+          "word": "始建于",
+          "pinyin": "shǐjiàn yú",
+          "meaning": "~에 처음 짓기 시작하다",
+          "pos": "동사구",
+          "hint": "shǐ(3성) + jiàn(4성) + yú(2성)"
+        },
+        {
+          "word": "历时",
+          "pinyin": "lìshí",
+          "meaning": "(시간이) 걸리다",
+          "pos": "동사",
+          "hint": "4성 + 2성"
+        },
+        {
+          "word": "最终",
+          "pinyin": "zuìzhōng",
+          "meaning": "마침내, 최종적으로",
+          "pos": "부사",
+          "hint": "4성 + 1성"
+        },
+        {
+          "word": "落成",
+          "pinyin": "luòchéng",
+          "meaning": "낙성하다, 완공되다",
+          "pos": "동사",
+          "hint": "4성 + 2성"
+        }
+      ]
+    },
+    {
+      "id": "s03",
+      "raw_text": "紫禁城不仅见证了明清两代二十四位皇帝的兴衰历史，更是中华灿烂文明的象征。",
+      "tts_text": "紫禁城不仅见证了明清两代二十四位皇帝的兴衰历史，更是中华灿烂文明的象征。",
+      "pinyin": "Zǐjìnchéng bùjǐn jiànzhèngle Míng Qīng liǎng dài èrshísì wèi huángdì de xīngshuāi lìshǐ, gèng shì Zhōnghuá cànlàn wénmíng de xiàngzhēng.",
+      "translation": "자금성은 명·청 두 왕조 스물네 명 황제의 흥망성쇠 역사를 증언했을 뿐만 아니라, 중화 찬란한 문명의 상징이기도 하다.",
+      "breath_marks": "紫禁城不仅见证了 / 明清两代二十四位皇帝的兴衰历史，/ 更是中华灿烂文明的象征。",
+      "syntax_diagram": "紫禁城 [주어] + 不仅 … 更是 … [상관 접속: ~뿐만 아니라 더욱이 ~이다]\n[술어1] 见证了 + [목적어1] 兴衰历史\n[술어2] 更是 + [목적어2] 文明的象征",
+      "pronunciation_hint": "不仅 (bùjǐn): '不' 뒤에 3성 'jǐn'이 오므로 'bù(4성)' 그대로 유지 (뒤에 4성이 올 때만 2성 'bú'로 변조).",
+      "vocabulary": [
+        {
+          "word": "不仅…更是…",
+          "pinyin": "bùjǐn… gèng shì…",
+          "meaning": "~일 뿐만 아니라 더욱이 ~이다",
+          "pos": "접속사구",
+          "hint": "핵심 상관 접속사"
+        },
+        {
+          "word": "见证",
+          "pinyin": "jiànzhèng",
+          "meaning": "증언하다, 목격하다",
+          "pos": "동사",
+          "hint": "4성 + 4성"
+        },
+        {
+          "word": "兴衰",
+          "pinyin": "xīngshuāi",
+          "meaning": "흥망성쇠",
+          "pos": "명사",
+          "hint": "1성 + 1성"
+        },
+        {
+          "word": "灿烂",
+          "pinyin": "cànlàn",
+          "meaning": "찬란하다",
+          "pos": "형용사",
+          "hint": "4성 + 4성"
+        },
+        {
+          "word": "象征",
+          "pinyin": "xiàngzhēng",
+          "meaning": "상징",
+          "pos": "명사",
+          "hint": "4성 + 1성"
+        }
+      ]
+    },
+    {
+      "id": "s04",
+      "raw_text": "红墙金瓦在阳光下交相辉映，展现出中国古典宫殿建筑无与伦比的宏伟与庄严。",
+      "tts_text": "红墙金瓦在阳光下交相辉映，展现出中国古典宫殿建筑无与伦比的宏伟与庄严。",
+      "pinyin": "Hóng qiáng jīn wǎ zài yángguāng xià jiāoxiāng huīyìng, zhǎnxiàn chū Zhōngguó gǔdiǎn gōngdiàn jiànzhù wúyǔlúnbǐ de hóngwěi yǔ zhuāngyán.",
+      "translation": "붉은 담장과 황금빛 기와가 햇빛 아래 서로 어우러져 눈부시게 빛나며, 중국 고전 궁궐 건축의 비할 데 없는 웅장함과 장엄함을 드러낸다.",
+      "breath_marks": "红墙金瓦 / 在阳光下交相辉映，/ 展现出 / 中国古典宫殿建筑 / 无与伦比的宏伟与庄严。",
+      "syntax_diagram": "红墙金瓦 [주어] + 在阳光下 [상황 부사어] + 交相辉映 [술어1]\n展现出 [술어2+방향보어] + [관형어구] 中国古典宫殿建筑无与伦比的 + 宏伟与庄严 [목적어]",
+      "pronunciation_hint": "金瓦 (jīn wǎ): wǎ는 3성. '展现出 (zhǎnxiàn chū)'는 chū(1성)을 맑고 길게 뻗어 방향보어의 입체감 강조.",
+      "vocabulary": [
+        {
+          "word": "交相辉映",
+          "pinyin": "jiāoxiāng huīyìng",
+          "meaning": "서로 어우러져 환히 빛나다",
+          "pos": "성어(成语)",
+          "hint": "1성+1성+1성+4성"
+        },
+        {
+          "word": "展现",
+          "pinyin": "zhǎnxiàn",
+          "meaning": "펼쳐 보이다, 드러내다",
+          "pos": "동사",
+          "hint": "3성 + 4성"
+        },
+        {
+          "word": "无与伦比",
+          "pinyin": "wúyǔlúnbǐ",
+          "meaning": "비할 데 없다, 비할 바 없이 뛰어나다",
+          "pos": "성어(成语)",
+          "hint": "2성+3성+2성+3성"
+        },
+        {
+          "word": "宏伟",
+          "pinyin": "hóngwěi",
+          "meaning": "웅장하다",
+          "pos": "형용사",
+          "hint": "2성 + 3성"
+        },
+        {
+          "word": "庄严",
+          "pinyin": "zhuāngyán",
+          "meaning": "장엄하다",
+          "pos": "형용사",
+          "hint": "1성 + 2성"
+        }
+      ]
+    },
+    {
+      "id": "s05",
+      "raw_text": "漫步在宽阔的太和殿广场上，人们仿佛能够穿透历史的风烟，倾听岁月的回响。",
+      "tts_text": "漫步在宽阔的太和殿广场上，人们仿佛能够穿透历史的风烟，倾听岁月的回响。",
+      "pinyin": "Mànbù zài kuānkuò de Tàihédiàn guǎngchǎng shàng, rénmen fǎngfú nénggòu chuāntòu lìshǐ de fēngyān, qīngtīng suìyuè de huíxiǎng.",
+      "translation": "드넓은 태화전 광장을 거닐다 보면, 사람들은 마치 역사의 비바람을 꿰뚫고 세월의 메아리를 귀 기울여 듣는 듯하다.",
+      "breath_marks": "漫步在宽阔的太和殿广场上，/ 人们仿佛能够 / 穿透历史的风烟，/ 倾听岁月的回响。",
+      "syntax_diagram": "[부사구] 漫步在宽阔的太和殿广场上\n人们 [주어] + 仿佛能够 [조동사구] + 穿透 [술어1] + 历史的风烟 [목적어1]\n+ 倾听 [술어2] + 岁月的回响 [목적어2]",
+      "pronunciation_hint": "太和殿 (Tàihédiàn): 4성+2성+4성. '仿佛 (fǎngfú)'는 3성+2성, '倾听 (qīngtīng)'은 1성+1성으로 정적인 집중을 표현.",
+      "vocabulary": [
+        {
+          "word": "漫步",
+          "pinyin": "mànbù",
+          "meaning": "산책하다, 한가로이 걷다",
+          "pos": "동사",
+          "hint": "4성 + 4성"
+        },
+        {
+          "word": "穿透",
+          "pinyin": "chuāntòu",
+          "meaning": "꿰뚫다, 통과하다",
+          "pos": "동사",
+          "hint": "1성 + 4성"
+        },
+        {
+          "word": "倾听",
+          "pinyin": "qīngtīng",
+          "meaning": "귀 기울여 듣다, 경청하다",
+          "pos": "동사",
+          "hint": "1성 + 1성"
+        },
+        {
+          "word": "回响",
+          "pinyin": "huíxiǎng",
+          "meaning": "메아리, 울림",
+          "pos": "명사",
+          "hint": "2성 + 3성"
+        }
+      ]
+    }
+  ]
+}

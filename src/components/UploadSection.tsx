@@ -5,6 +5,7 @@ interface UploadSectionProps {
   selectedFile: File | null;
   onFileSelect: (file: File | null) => void;
   demoChecked: boolean;
+  demoLang?: 'zh' | 'fr';
   onRunDemo: () => void;
   onRunPhoto: () => void;
   isLoading: boolean;
@@ -79,6 +80,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   selectedFile,
   onFileSelect,
   demoChecked,
+  demoLang = 'zh',
   onRunDemo,
   onRunPhoto,
   isLoading,
@@ -184,7 +186,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                 <span className="font-semibold text-indigo-600">사진 파일 선택</span> 또는 드래그하여 업로드
               </div>
               <p className="text-[11px] text-slate-400 max-w-md">
-                스마트폰으로 책 페이지를 찍어 올리시면 원어민 쉐도잉 교재로 즉시 변환됩니다 (장변 3,000px 정밀 분석 지원).
+                스마트폰으로 책 페이지를 찍어 올리시면 중국어, 프랑스어, 영어, 한국어 등 원어민 쉐도잉 교재로 즉시 변환됩니다 (장변 3,000px 정밀 분석 지원).
               </p>
             </>
           )}
@@ -210,10 +212,14 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <button
             onClick={onRunDemo}
             disabled={isLoading}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer ${
+              demoLang === 'zh'
+                ? 'bg-amber-600 hover:bg-amber-700'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            데모 페이지 실행하기
+            {demoLang === 'zh' ? '🇨🇳 중국어 데모 실행하기' : '🇫🇷 프랑스어 데모 실행하기'}
           </button>
         ) : (
           <button

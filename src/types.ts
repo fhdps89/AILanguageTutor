@@ -4,6 +4,7 @@ export interface VocabularyItem {
   hint?: string;
   baseForm?: string;
   pos?: string;
+  pinyin?: string;
 }
 
 export interface KoreanChunkItem {
@@ -25,6 +26,8 @@ export interface SentenceItem {
   sound_romanization?: string;
   korean_chunks?: KoreanChunkItem[];
   formality_badge?: string | null;
+  // Chinese learning mode fields
+  pinyin?: string;
 }
 
 export interface LanguageInfo {

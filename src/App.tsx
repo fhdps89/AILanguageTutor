@@ -18,6 +18,7 @@ export function App() {
   });
 
   const [demoChecked, setDemoChecked] = useState(false);
+  const [demoLang, setDemoLang] = useState<'zh' | 'fr'>('zh');
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -292,23 +293,25 @@ export function App() {
     setInfoMessage(null);
 
     try {
-      const res = await fetch('/api/demo', {
+      const res = await fetch(`/api/demo?lang=${demoLang}`, {
         headers: { 'x-device-id': getDeviceId() },
       });
       if (!res.ok) {
         throw new Error('데모 데이터를 불러오지 못했습니다.');
       }
       const data = await res.json();
+      const lessonKey = data.key || (demoLang === 'zh' ? 'demo-chinese' : 'demo-arc');
       setCurrentPage(data.page);
-      setCurrentKey('demo-arc');
-      setSelectedKey('demo-arc');
+      setCurrentKey(lessonKey);
+      setSelectedKey(lessonKey);
       setPhotoUrl(null);
 
-      saveStoredPage('demo-arc', {
+      saveStoredPage(lessonKey, {
         page: data.page,
         photoUrl: null,
       });
-      setInfoMessage('개선문 데모 페이지를 불러왔습니다. Gemini 원어민 음성으로 바로 학습해보세요.');
+      const langName = data.page.language?.name_ko || '외국어';
+      setInfoMessage(`${langName} 데모 페이지("${data.page.title}")를 불러왔습니다. Gemini 원어민 음성으로 바로 학습해보세요.`);
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -392,6 +395,8 @@ export function App() {
           status={status}
           demoChecked={demoChecked}
           onDemoChange={setDemoChecked}
+          demoLang={demoLang}
+          onSelectDemoLang={setDemoLang}
           library={library}
           selectedKey={selectedKey}
           onSelectKey={setSelectedKey}
@@ -406,6 +411,7 @@ export function App() {
             selectedFile={selectedFile}
             onFileSelect={setSelectedFile}
             demoChecked={demoChecked}
+            demoLang={demoLang}
             onRunDemo={handleRunDemo}
             onRunPhoto={handleRunPhoto}
             isLoading={isLoading}
