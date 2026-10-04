@@ -29,7 +29,113 @@ if (!fs.existsSync(TTS_CACHE_DIR)) {
   fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
 }
 
-// Security: Rate limiting
+// ==========================================
+// 일일 호출 한도 설정 (상수 모음)
+// ==========================================
+// 날짜 변경 기준 시각 (Google 초기화 시각에 맞춰 조정 필요)
+// 현재는 한국 표준시(KST, UTC+9) 자정(00:00)을 기준으로 하루 사용량을 초기화합니다.
+const DAILY_RESET_TZ_OFFSET_HOURS = 9;
+
+const DAILY_LIMITS = {
+  TTS_GLOBAL_MAX: 80,       // 서버 전체 일일 음성 생성 한도 (Google 약 100회 한도 대비 사전 차단)
+  TTS_DEVICE_MAX: 40,       // 기기당 일일 음성 생성 한도
+  TTS_ANONYMOUS_MAX: 10,    // 식별자 없는 anonymous 일일 음성 생성 한도
+  ANALYZE_DEVICE_MAX: 10,   // 기기당 일일 사진 분석 한도
+  ANALYZE_ANONYMOUS_MAX: 3, // 식별자 없는 anonymous 일일 사진 분석 한도
+};
+
+const LIMIT_MESSAGES = {
+  TTS_DEVICE_LIMIT: '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.',
+  TTS_GLOBAL_LIMIT: '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.',
+  ANALYZE_DEVICE_LIMIT: '오늘 분석할 수 있는 사진 수를 모두 사용했어요. 이미 만든 수업은 서재에서 계속 볼 수 있어요.',
+};
+
+class RateLimitError extends Error {
+  code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT';
+  constructor(code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT', message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.code = code;
+  }
+}
+
+interface DailyUsageState {
+  dayKey: string;
+  globalTtsCount: number;
+  deviceTtsCounts: Map<string, number>;
+  deviceAnalyzeCounts: Map<string, number>;
+}
+
+function getCurrentDayKey(): string {
+  // Google 초기화 시각에 맞춰 조정 필요 (한국 시간 자정 기준)
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const targetDate = new Date(utcMs + DAILY_RESET_TZ_OFFSET_HOURS * 3600000);
+  const yyyy = targetDate.getFullYear();
+  const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(targetDate.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+let dailyUsage: DailyUsageState = {
+  dayKey: getCurrentDayKey(),
+  globalTtsCount: 0,
+  deviceTtsCounts: new Map(),
+  deviceAnalyzeCounts: new Map(),
+};
+
+function getDailyState(): DailyUsageState {
+  const currentKey = getCurrentDayKey();
+  if (dailyUsage.dayKey !== currentKey) {
+    dailyUsage = {
+      dayKey: currentKey,
+      globalTtsCount: 0,
+      deviceTtsCounts: new Map(),
+      deviceAnalyzeCounts: new Map(),
+    };
+  }
+  return dailyUsage;
+}
+
+function checkAndIncrementTtsLimit(deviceId: string) {
+  const state = getDailyState();
+  const safeId = (deviceId || 'anonymous').trim() || 'anonymous';
+
+  // 1. Check Global TTS Limit
+  if (state.globalTtsCount >= DAILY_LIMITS.TTS_GLOBAL_MAX) {
+    throw new RateLimitError('TTS_GLOBAL_LIMIT', LIMIT_MESSAGES.TTS_GLOBAL_LIMIT);
+  }
+
+  // 2. Check Device TTS Limit
+  const maxForDevice = safeId === 'anonymous' ? DAILY_LIMITS.TTS_ANONYMOUS_MAX : DAILY_LIMITS.TTS_DEVICE_MAX;
+  const currentDeviceCount = state.deviceTtsCounts.get(safeId) || 0;
+
+  if (currentDeviceCount >= maxForDevice) {
+    throw new RateLimitError('TTS_DEVICE_LIMIT', LIMIT_MESSAGES.TTS_DEVICE_LIMIT);
+  }
+
+  // Increment counters right before calling Gemini API
+  state.globalTtsCount += 1;
+  state.deviceTtsCounts.set(safeId, currentDeviceCount + 1);
+  console.log(`[TTS Quota] Device '${safeId}': ${currentDeviceCount + 1}/${maxForDevice}, Global: ${state.globalTtsCount}/${DAILY_LIMITS.TTS_GLOBAL_MAX}`);
+}
+
+function checkAndIncrementAnalyzeLimit(deviceId: string) {
+  const state = getDailyState();
+  const safeId = (deviceId || 'anonymous').trim() || 'anonymous';
+
+  const maxForDevice = safeId === 'anonymous' ? DAILY_LIMITS.ANALYZE_ANONYMOUS_MAX : DAILY_LIMITS.ANALYZE_DEVICE_MAX;
+  const currentDeviceCount = state.deviceAnalyzeCounts.get(safeId) || 0;
+
+  if (currentDeviceCount >= maxForDevice) {
+    throw new RateLimitError('ANALYZE_DEVICE_LIMIT', LIMIT_MESSAGES.ANALYZE_DEVICE_LIMIT);
+  }
+
+  state.deviceAnalyzeCounts.set(safeId, currentDeviceCount + 1);
+  console.log(`[Analyze Quota] Device '${safeId}': ${currentDeviceCount + 1}/${maxForDevice}`);
+}
+
+// Security: Express rate limiting (DDoS & rapid burst protection)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 600,
@@ -54,7 +160,43 @@ const analyzeLimiter = rateLimit({
   },
 });
 
-app.use(cors());
+// CORS: Restrict to allowed origins or same-origin only
+const rawAllowedOrigins = process.env.ALLOWED_ORIGINS || '';
+const allowedOrigins = rawAllowedOrigins
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors((req: Request, callback: (err: Error | null, options?: cors.CorsOptions) => void) => {
+    const origin = req.headers.origin;
+    const host = req.headers.host;
+
+    // Requests without origin header (e.g. server-to-server, direct curl, same-origin GET)
+    if (!origin) {
+      return callback(null, { origin: true });
+    }
+
+    // Explicit ALLOWED_ORIGINS configured
+    if (allowedOrigins.length > 0) {
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, { origin: true });
+      }
+      return callback(null, { origin: false });
+    }
+
+    // Default when ALLOWED_ORIGINS is not set: allow same-origin requests only
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost === host) {
+        return callback(null, { origin: true });
+      }
+    } catch {}
+
+    return callback(null, { origin: false });
+  })
+);
+
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use('/api/', generalLimiter);
@@ -336,7 +478,8 @@ async function generateGeminiSpeech(
   text: string,
   langName?: string,
   voiceName: string = 'Kore',
-  speed: string = '1.0'
+  speed: string = '1.0',
+  deviceId: string = 'anonymous'
 ): Promise<{ buffer: Buffer; mimeType: string; hash: string } | null> {
   let cleanText = String(text || '').trim();
   if (!cleanText) return null;
@@ -376,6 +519,9 @@ async function generateGeminiSpeech(
     console.warn('Gemini API client is not configured');
     return null;
   }
+
+  // Check and increment rate limit quota right before calling Gemini API
+  checkAndIncrementTtsLimit(deviceId);
 
   const speechPromise = (async () => {
     try {
@@ -477,7 +623,8 @@ app.get('/api/demo', async (_req: Request, res: Response) => {
       photoUrl: null,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('Error in /api/demo:', err);
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 
@@ -529,7 +676,8 @@ app.get('/api/lesson/:key', async (req: Request, res: Response) => {
       photoUrl,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('Error in /api/lesson/:key:', err);
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 
@@ -609,15 +757,16 @@ app.post('/api/tts/prepare', async (req: Request, res: Response) => {
   const rawLang = String(req.body.lang || '').trim();
   const rawVoice = String(req.body.voice || 'Kore').trim();
   const rawSpeed = String(req.body.speed || req.body.rate || '1.0').trim();
+  const deviceId = getOwnerId(req);
 
   if (!rawText) {
     return res.status(400).json({ error: 'Text parameter is required' });
   }
 
   try {
-    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed);
+    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed, deviceId);
     if (!result) {
-      return res.status(500).json({ error: 'Gemini TTS generation failed' });
+      return res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
     }
 
     return res.json({
@@ -625,8 +774,11 @@ app.post('/api/tts/prepare', async (req: Request, res: Response) => {
       audioUrl: `/api/tts/${result.hash}`,
     });
   } catch (err: any) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({ error: err.message, code: err.code });
+    }
     console.error('Error in /api/tts/prepare:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 
@@ -636,23 +788,27 @@ app.get('/api/tts', async (req: Request, res: Response) => {
   const rawLang = String(req.query.lang || '').trim();
   const rawVoice = String(req.query.voice || 'Kore').trim();
   const rawSpeed = String(req.query.speed || req.query.rate || '1.0').trim();
+  const deviceId = getOwnerId(req);
 
   if (!rawText) {
     return res.status(400).json({ error: 'Text query parameter is required' });
   }
 
   try {
-    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed);
+    const result = await generateGeminiSpeech(rawText, rawLang, rawVoice, rawSpeed, deviceId);
     if (!result) {
-      return res.status(500).json({ error: 'Gemini TTS generation failed' });
+      return res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
     }
 
     res.setHeader('Content-Type', result.mimeType || 'audio/wav');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(result.buffer);
   } catch (err: any) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({ error: err.message, code: err.code });
+    }
     console.error('Error in /api/tts GET:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 
@@ -694,6 +850,9 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
     }
 
     // 2. Perform OCR analysis using Google Gemini Vision
+    // Rate limit check before calling Gemini Vision model
+    checkAndIncrementAnalyzeLimit(callerOwnerId);
+
     const ai = getGenAIClient();
     if (!ai) {
       return res.status(400).json({
@@ -772,7 +931,7 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
       try {
         const langParam = pageData.language?.name_en || pageData.language?.code || '';
         for (const s of (pageData.sentences || []).slice(0, 3)) {
-          await generateGeminiSpeech(s.tts_text || s.raw_text, langParam, 'Kore', '1.0');
+          await generateGeminiSpeech(s.tts_text || s.raw_text, langParam, 'Kore', '1.0', callerOwnerId);
         }
       } catch (e) {
         console.warn('Background TTS warming error:', e);
@@ -786,8 +945,11 @@ app.post('/api/analyze', analyzeLimiter, upload.single('photo'), async (req: Req
       reused: false,
     });
   } catch (err: any) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({ error: err.message, code: err.code });
+    }
     console.error('Analyze error:', err);
-    res.status(500).json({ error: err.message || '사진 분석 중 오류가 발생했습니다.' });
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 

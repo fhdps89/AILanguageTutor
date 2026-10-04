@@ -56,3 +56,23 @@
 ### 4.3 문장 릴레이 전체 낭독 플로우
 - 문장 카드 쉐도잉 리스트 하단에 전체 지문 플레이어(`FullPagePlayer`) 배치.
 - 문장 간 350ms 자연스러운 숨 고르기(Breath Cadence)를 두어 자연스러운 낭독 경험 제공.
+
+---
+
+## 5. 일일 호출 한도 및 쿼터 관리 시스템 (Daily Quota Architecture)
+
+### 5.1 일일 한도 설정 (상수 분리)
+Google Gemini 일일 할당량(약 100회) 고갈로 인한 전체 사용자 서비스 마비를 방지하기 위해 서버 상단에 안전 상한을 정의합니다.
+- **서버 전체 일일 음성 생성:** 80회 (`TTS_GLOBAL_MAX`)
+- **기기당 일일 음성 생성:** 40회 (`TTS_DEVICE_MAX`)
+- **식별자 미제공 기기 (`anonymous`):** 10회 (`TTS_ANONYMOUS_MAX`)
+- **일일 리셋 기준 시각:** KST 자정(00:00) 기준 (`DAILY_RESET_TZ_OFFSET_HOURS = 9`)
+
+### 5.2 검사 및 카운트 시점 (Zero-Quota Cache Bypass)
+- **위치:** `generateGeminiSpeech` 함수 내부에서 디스크 캐시 확인 및 진행 중 요청 합치기(`inFlightTts`)를 모두 통과한 뒤, 실제 `ai.models.generateContent` 호출 직전에만 검사 및 카운트합니다.
+- **캐시 음성 보호:** 이미 생성된 오디오(캐시 히트)는 쿼터를 1회도 소비하지 않으며, 일일 한도에 도달한 후에도 기존 수업의 음성은 영구적으로 재생 가능합니다.
+
+### 5.3 429 수신 및 프론트엔드 폴백 방어
+- 한도 도달 시 `HTTP 429`와 에러 코드(`TTS_DEVICE_LIMIT` 또는 `TTS_GLOBAL_LIMIT`) 및 친절한 한국어 안내 문구를 반환합니다.
+- 클라이언트는 429 수신 시 브라우저 내장 합성기(Web Speech API)로 몰래 전환하지 않고, `ai-tutor-rate-limit` 커스텀 이벤트를 발생시켜 상단 고정 안내 배너를 통해 사용자에게 상황을 명확히 고지합니다.
+

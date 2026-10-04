@@ -6,19 +6,7 @@ import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark } from './types';
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
-
-function getDeviceId(): string {
-  try {
-    let id = localStorage.getItem('ai_tutor_device_id');
-    if (!id) {
-      id = 'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-      localStorage.setItem('ai_tutor_device_id', id);
-    }
-    return id;
-  } catch {
-    return 'dev_default';
-  }
-}
+import { getDeviceId } from './utils/audio';
 
 export function App() {
   const [status, setStatus] = useState<SystemStatus>({
@@ -91,6 +79,17 @@ export function App() {
   useEffect(() => {
     fetchStatus();
     fetchLibraryAndLoadLatest();
+
+    const handleRateLimit = (e: any) => {
+      const msg = e.detail?.message || '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.';
+      setErrorMessage(msg);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.addEventListener('ai-tutor-rate-limit', handleRateLimit);
+    return () => {
+      window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
+    };
   }, []);
 
   const fetchStatus = async () => {
@@ -415,12 +414,22 @@ export function App() {
 
           {/* Feedback messages */}
           {errorMessage && (
-            <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 p-4 text-xs text-red-800">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-              <div>
-                <span className="font-semibold">오류: </span>
-                <span>{errorMessage}</span>
+            <div className="sticky top-4 z-50 flex items-start justify-between gap-3 rounded-xl bg-red-50/95 backdrop-blur-xs border-2 border-red-300 p-4 text-xs sm:text-sm text-red-900 shadow-md">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
+                <div>
+                  <span className="font-bold text-red-950">안내: </span>
+                  <span className="font-medium leading-relaxed">{errorMessage}</span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="shrink-0 rounded-md p-1 text-red-500 hover:text-red-700 hover:bg-red-100 transition cursor-pointer"
+                title="닫기"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
 

@@ -6,6 +6,25 @@
 
 ---
 
+## [2026-10-04 KST] 일일 사용 한도 방어 및 보안 강화 (Daily Quota Protection & Security Hardening)
+- **Gemini 일일 호출 한도 사전 보호 (In-Memory Daily Quota Limiter):**
+  - 단일 사용자의 과도한 반복 호출로 인한 당일 서비스 중단을 방지하기 위해 서버 사전 차단 계층 구축.
+  - 서버 전체 음성 생성 일 80회, 기기당 음성 40회, 기기당 사진 분석 10회 상한 적용 (`x-device-id` 없는 anonymous는 음성 10회, 사진 3회 적용).
+  - KST(한국 표준시) 자정 기준으로 하루 사용량 자동 초기화 (`DAILY_RESET_TZ_OFFSET_HOURS = 9`).
+- **스마트 캐시 우선 검사 (Zero-Quota Cache Hit):**
+  - 디스크 캐시 확인 및 진행 중 요청(In-Flight) 합치기를 통과한 뒤, 실제 Gemini 모델 호출 직전에만 쿼터 검사 및 카운트 수행.
+  - 이미 생성된 음성이나 분석된 사진을 다시 열람할 때는 카운트가 증가하지 않으며, 일일 한도 초과 상태에서도 기존 캐시 음성은 100% 정상 재생 유지.
+- **정제된 에러 핸들링 & 친절한 화면 안내:**
+  - 상한 도달 시 HTTP 429 및 표준 코드(`TTS_DEVICE_LIMIT`, `TTS_GLOBAL_LIMIT`, `ANALYZE_DEVICE_LIMIT`)와 쉬운 한국어 안내 문구 반환.
+  - 프론트엔드에서 429 수신 시 브라우저 기본 음성(Web Speech API)으로 몰래 바뀌는 현상을 방지하고, 상단 고정 안내 배너로 직관적 전달.
+  - `FullPagePlayer` 전체 낭독 진행 중 한도 도달 시 불필요한 후속 요청을 방지하도록 재생 릴레이 즉시 안전 중단.
+- **서버 내부 오류 정보 은닉:**
+  - `/api/tts/prepare`, `GET /api/tts`, `/api/analyze`, `/api/demo`, `/api/lesson/:key`의 오류 처리에서 내부 스택 트레이스 노출을 차단하고 표준 정제 문구(`"일시적인 오류예요. 잠시 후 다시 시도해 주세요."`)로 통일.
+- **CORS 출처 제한 강화:**
+  - `ALLOWED_ORIGINS` 환경변수를 통한 지정 출처 화이트리스트 및 미설정 시 동일 출처(Same-Origin) 전용 CORS 정책 적용.
+
+---
+
 ## [2026-10-01 KST] Build `20260930-gemini-single` (계층화 문서화 및 배포 격리 아키텍처 수립)
 - **공식 빌드 버전 동기화:**
   - 애플리케이션 공식 빌드 버전을 `build 20260930-gemini-single`로 표준 동기화.

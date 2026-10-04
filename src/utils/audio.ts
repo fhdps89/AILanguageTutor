@@ -13,6 +13,19 @@ let currentPlayId = 0;
 // Client-side in-memory cache for resolved hash audio URLs
 const resolvedUrlCache = new Map<string, string>();
 
+export function getDeviceId(): string {
+  try {
+    let id = localStorage.getItem('ai_tutor_device_id');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem('ai_tutor_device_id', id);
+    }
+    return id;
+  } catch {
+    return 'dev_default';
+  }
+}
+
 function getSharedAudio(): HTMLAudioElement {
   if (typeof window === 'undefined') {
     return {} as HTMLAudioElement;
@@ -93,9 +106,13 @@ async function resolveAudioUrl(
 
   // Request server to prepare hash-based audio via POST
   try {
+    const deviceId = getDeviceId();
     const res = await fetch('/api/tts/prepare', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId,
+      },
       body: JSON.stringify({
         text,
         lang,
@@ -105,6 +122,29 @@ async function resolveAudioUrl(
     });
     clearInterval(msgInterval);
 
+    // If rate limit reached, notify UI and do not fall back to browser speech
+    if (res.status === 429) {
+      const errData = await res.json().catch(() => ({}));
+      const message =
+        errData.error ||
+        (errData.code === 'TTS_GLOBAL_LIMIT'
+          ? '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.'
+          : '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.');
+      const code = errData.code || 'TTS_DEVICE_LIMIT';
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('ai-tutor-rate-limit', {
+            detail: { message, code },
+          })
+        );
+      }
+      const rateErr = new Error(message);
+      (rateErr as any).isRateLimit = true;
+      (rateErr as any).code = code;
+      throw rateErr;
+    }
+
     if (res.ok) {
       const data = await res.json();
       if (data.audioUrl) {
@@ -112,14 +152,18 @@ async function resolveAudioUrl(
         return data.audioUrl;
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     clearInterval(msgInterval);
+    if (e?.isRateLimit) {
+      throw e;
+    }
     console.warn('Failed to prepare hash audio, falling back to query route', e);
   }
 
   clearInterval(msgInterval);
-  // Fallback to GET endpoint
-  const fallbackUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}`;
+  // Fallback to GET endpoint with &deviceId=... query
+  const deviceId = getDeviceId();
+  const fallbackUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}&deviceId=${encodeURIComponent(deviceId)}`;
   return fallbackUrl;
 }
 
@@ -157,7 +201,21 @@ export async function playSentenceAudio({
   }
 
   const speedParam = rate === 1.0 ? '1.0' : String(rate);
-  const targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam, onPreparing);
+  let targetAudioUrl: string;
+
+  try {
+    targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam, onPreparing);
+  } catch (err: any) {
+    if (thisPlayId === currentPlayId) {
+      if (activeRafId) {
+        cancelAnimationFrame(activeRafId);
+        activeRafId = null;
+      }
+      onError?.(err);
+      onEnd?.();
+    }
+    return;
+  }
 
   // If user triggered another sound while we were resolving URL, abort
   if (thisPlayId !== currentPlayId) {
@@ -216,12 +274,36 @@ export async function playSentenceAudio({
       }
     };
 
-    audio.onerror = (e) => {
+    audio.onerror = async (e) => {
       if (thisPlayId === currentPlayId) {
         if (activeRafId) {
           cancelAnimationFrame(activeRafId);
           activeRafId = null;
         }
+
+        // If fallback query returned 429, don't secretly fall back to Web Speech
+        if (targetAudioUrl.includes('/api/tts?')) {
+          try {
+            const probeRes = await fetch(targetAudioUrl);
+            if (probeRes.status === 429) {
+              const probeData = await probeRes.json().catch(() => ({}));
+              const msg =
+                probeData.error ||
+                (probeData.code === 'TTS_GLOBAL_LIMIT'
+                  ? '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.'
+                  : '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.');
+              window.dispatchEvent(
+                new CustomEvent('ai-tutor-rate-limit', {
+                  detail: { message: msg, code: probeData.code || 'TTS_DEVICE_LIMIT' },
+                })
+              );
+              onError?.(new Error(msg));
+              onEnd?.();
+              return;
+            }
+          } catch {}
+        }
+
         console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
         speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
       }
@@ -229,11 +311,16 @@ export async function playSentenceAudio({
 
     audio.load();
     await audio.play();
-  } catch (err) {
+  } catch (err: any) {
     if (thisPlayId === currentPlayId) {
       if (activeRafId) {
         cancelAnimationFrame(activeRafId);
         activeRafId = null;
+      }
+      if (err?.isRateLimit) {
+        onError?.(err);
+        onEnd?.();
+        return;
       }
       console.warn('Audio play error, falling back to Web Speech', err);
       speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);

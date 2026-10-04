@@ -45,8 +45,13 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
 
   useEffect(() => {
     isMountedRef.current = true;
+    const handleRateLimit = () => {
+      stopRelay();
+    };
+    window.addEventListener('ai-tutor-rate-limit', handleRateLimit);
     return () => {
       isMountedRef.current = false;
+      window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
       if (relayTimerRef.current) {
         clearTimeout(relayTimerRef.current);
         relayTimerRef.current = null;
