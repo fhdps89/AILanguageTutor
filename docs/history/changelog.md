@@ -26,6 +26,9 @@
   - 긴 문장 분석 시 토큰 한도로 인한 JSON 중간 절단을 방지하도록 `maxOutputTokens: 8192` 적용.
   - LLM이 ASCII 구문도나 따옴표 내부에서 출력한 제어 문자(이스케이프되지 않은 개행 `\n`, 탭 `\t`), 후행 쉼표(Trailing Comma)를 자동 정제하는 JSON 자동 복구(Auto-Repair) 파이프라인 구현.
   - 스마트폰 고해상도 원본 사진 업로드 시 15MB 제한으로 인한 실패를 방지하도록 Multer 한도를 30MB로 증설하고, 모바일 캔버스 압축 기준을 2,500px로 최적화.
+- **AI 안전 기준 응답 및 예외 처리 고도화 (AI Safety Policy & Response Handling):**
+  - `safetySettings`에 4대 유해 카테고리(`SEXUALLY_EXPLICIT`, `HARASSMENT`, `DANGEROUS_CONTENT`, `HATE_SPEECH`)의 `BLOCK_ONLY_HIGH` 임계치를 구성하여 문학 작품 내 표현에 대한 과도한 차단 완화.
+  - 안전 기준 차단 시(`SAFETY_BLOCKED`) 내부 사유는 서버 로그(`console.warn`)에만 기록하고, 클라이언트에는 정제된 안내 문구(`"이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요."`)와 HTTP 400 응답 제공.
 
 ---
 

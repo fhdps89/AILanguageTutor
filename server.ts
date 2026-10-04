@@ -6,7 +6,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 
 dotenv.config();
 
@@ -1038,8 +1038,28 @@ app.post(
     const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
     const imageMime = req.file?.mimetype && req.file.mimetype.startsWith('image/') ? req.file.mimetype : 'image/jpeg';
 
+    const analyzeSafetySettings = [
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+    ];
+
     let pageData: any = null;
     let lastError: any = null;
+    const modelErrors: any[] = [];
 
     for (const modelCandidate of fallbackModels) {
       try {
@@ -1059,20 +1079,60 @@ app.post(
             responseMimeType: 'application/json',
             temperature: 0,
             maxOutputTokens: 8192,
+            safetySettings: analyzeSafetySettings,
           },
         });
 
-        const responseText = response.text || '';
+        let responseText = '';
+        try {
+          responseText = response.text || '';
+        } catch {
+          responseText = '';
+        }
+
+        if (!responseText.trim()) {
+          const blockReason = (response.promptFeedback as any)?.blockReason;
+          const finishReason = response.candidates?.[0]?.finishReason;
+          const blockedReasons = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'IMAGE_SAFETY'];
+          const matchedReason = [blockReason, finishReason].find(
+            (r) => r && blockedReasons.includes(String(r))
+          );
+          if (matchedReason) {
+            console.warn(`[OCR] Model ${modelCandidate} blocked by safety policy: blockReason=${blockReason}, finishReason=${finishReason}`);
+            const safetyErr: any = new Error('SAFETY_BLOCKED');
+            safetyErr.code = 'SAFETY_BLOCKED';
+            throw safetyErr;
+          }
+        }
+
         pageData = extractJson(responseText);
         console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
         break;
       } catch (err: any) {
-        console.warn(`[OCR] Model ${modelCandidate} failed:`, err.message || err);
+        let isSafety = err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED';
+        if (!isSafety) {
+          const errMsg = String(err?.message || '');
+          const blockedReasons = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'IMAGE_SAFETY'];
+          if (blockedReasons.some((r) => errMsg.includes(r))) {
+            isSafety = true;
+            err.code = 'SAFETY_BLOCKED';
+          }
+        }
+        console.warn(`[OCR] Model ${modelCandidate} failed:`, isSafety ? 'SAFETY_BLOCKED' : (err.message || err));
         lastError = err;
+        modelErrors.push(err);
       }
     }
 
     if (!pageData) {
+      const allBlockedBySafety = modelErrors.length > 0 && modelErrors.every(
+        (e) => e?.code === 'SAFETY_BLOCKED' || e?.message === 'SAFETY_BLOCKED'
+      );
+      if (allBlockedBySafety) {
+        const safetyError: any = new Error('SAFETY_BLOCKED');
+        safetyError.code = 'SAFETY_BLOCKED';
+        throw safetyError;
+      }
       throw new Error(`Gemini 모델 분석 실패: ${lastError?.message || '모든 Gemini 모델 응답 불가'}`);
     }
 
@@ -1122,6 +1182,11 @@ app.post(
     if (err instanceof RateLimitError) {
       return res.status(429).json({ error: err.message, code: err.code });
     }
+    if (err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED') {
+      return res.status(400).json({
+        error: '이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요.',
+      });
+    }
     console.error('Analyze error:', err);
     try {
       const errLog = `[${new Date().toISOString()}] Analyze error: ${err?.stack || err?.message || err}\n`;
@@ -1129,9 +1194,6 @@ app.post(
     } catch {}
 
     const errMsg = String(err?.message || '');
-    if (errMsg.includes('SAFETY') || errMsg.includes('blocked')) {
-      return res.status(400).json({ error: '사진 내용이 안전 기준에 의해 분석되지 못했습니다. 다른 사진으로 시도해 주세요.' });
-    }
     if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('429')) {
       return res.status(429).json({ error: 'Gemini 모델 일일 호출 한도에 도달했습니다. 잠시 후 또는 내일 다시 시도해 주세요.' });
     }
