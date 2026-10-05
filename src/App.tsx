@@ -31,6 +31,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // Local storage helpers
@@ -84,6 +85,7 @@ export function App() {
     const handleRateLimit = (e: any) => {
       const msg = e.detail?.message || '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.';
       setErrorMessage(msg);
+      setErrorCode(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -146,6 +148,7 @@ export function App() {
     setIsLoading(true);
     setLoadingMessage('페이지를 불러오는 중입니다...');
     setErrorMessage(null);
+    setErrorCode(null);
     setInfoMessage(null);
 
     try {
@@ -184,6 +187,7 @@ export function App() {
       setSelectedKey(loadedData.key);
     } catch (err: any) {
       setErrorMessage(err.message);
+      setErrorCode(null);
     } finally {
       setIsLoading(false);
     }
@@ -234,6 +238,7 @@ export function App() {
       setInfoMessage(`"${displayName}" 기록이 삭제되었습니다.`);
     } catch (err: any) {
       setErrorMessage(`삭제 중 오류가 발생했습니다: ${err.message}`);
+      setErrorCode(null);
     }
   };
 
@@ -290,6 +295,7 @@ export function App() {
     setIsLoading(true);
     setLoadingMessage('데모 페이지를 로드하는 중입니다...');
     setErrorMessage(null);
+    setErrorCode(null);
     setInfoMessage(null);
 
     try {
@@ -314,6 +320,7 @@ export function App() {
       setInfoMessage(`${langName} 데모 페이지("${data.page.title}")를 불러왔습니다. Gemini 원어민 음성으로 바로 학습해보세요.`);
     } catch (err: any) {
       setErrorMessage(err.message);
+      setErrorCode(null);
     } finally {
       setIsLoading(false);
     }
@@ -325,6 +332,7 @@ export function App() {
     setIsLoading(true);
     setLoadingMessage('Google Gemini 3.8 Flash Vision으로 언어 판독 & 분석 중...');
     setErrorMessage(null);
+    setErrorCode(null);
     setInfoMessage(null);
 
     try {
@@ -338,8 +346,13 @@ export function App() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '사진 분석에 실패했습니다.');
+        let errData: any = {};
+        try {
+          errData = await res.json();
+        } catch {}
+        const errorObj: any = new Error(errData.error || '사진 분석에 실패했습니다.');
+        errorObj.code = errData.code;
+        throw errorObj;
       }
 
       const data = await res.json();
@@ -379,7 +392,8 @@ export function App() {
 
       fetchLibraryAndLoadLatest();
     } catch (err: any) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || '사진 분석에 실패했습니다.');
+      setErrorCode(err.code || null);
     } finally {
       setIsLoading(false);
     }
@@ -425,12 +439,22 @@ export function App() {
                 <AlertCircle className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
                 <div>
                   <span className="font-bold text-red-950">안내: </span>
-                  <span className="font-medium leading-relaxed">{errorMessage}</span>
+                  <span className="font-medium leading-relaxed">
+                    {errorMessage}
+                    {errorCode && (
+                      <span className="text-[11px] sm:text-xs text-red-700/80 font-normal ml-1.5">
+                        (오류 코드: {errorCode})
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setErrorMessage(null)}
+                onClick={() => {
+                  setErrorMessage(null);
+                  setErrorCode(null);
+                }}
                 className="shrink-0 rounded-md p-1 text-red-500 hover:text-red-700 hover:bg-red-100 transition cursor-pointer"
                 title="닫기"
               >

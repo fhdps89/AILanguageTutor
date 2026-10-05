@@ -979,7 +979,7 @@ app.post(
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ error: '사진 파일 크기가 30MB를 초과했습니다. 더 작은 크기의 사진으로 올려주세요.' });
         }
-        return res.status(400).json({ error: `사진 업로드 오류: ${err.message}` });
+        return res.status(400).json({ error: '사진 업로드 중 오류가 발생했습니다. 다시 시도해 주세요.' });
       }
       next();
     });
@@ -1057,11 +1057,12 @@ app.post(
       },
     ];
 
+    type AnalyzeErrorCode = 'SAFETY_BLOCKED' | 'RECITATION' | 'EMPTY_RESPONSE' | 'JSON_PARSE' | 'MODEL_FAILED' | 'UNKNOWN';
     let pageData: any = null;
-    let lastError: any = null;
-    const modelErrors: any[] = [];
+    const modelAttempts: Array<{ model: string; code: AnalyzeErrorCode }> = [];
 
     for (const modelCandidate of fallbackModels) {
+      let currentFinishReason: string | undefined = undefined;
       try {
         console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate} (${imageMime})`);
         const response = await ai.models.generateContent({
@@ -1083,6 +1084,10 @@ app.post(
           },
         });
 
+        const blockReason = (response.promptFeedback as any)?.blockReason;
+        currentFinishReason = response.candidates?.[0]?.finishReason;
+        const candidatesCount = response.candidates?.length ?? 0;
+
         let responseText = '';
         try {
           responseText = response.text || '';
@@ -1091,49 +1096,111 @@ app.post(
         }
 
         if (!responseText.trim()) {
-          const blockReason = (response.promptFeedback as any)?.blockReason;
-          const finishReason = response.candidates?.[0]?.finishReason;
+          console.warn(
+            `[OCR] Model ${modelCandidate} empty response text: blockReason=${blockReason}, finishReason=${currentFinishReason}, candidatesCount=${candidatesCount}`
+          );
+
           const blockedReasons = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'IMAGE_SAFETY'];
-          const matchedReason = [blockReason, finishReason].find(
+          const isSafety = [blockReason, currentFinishReason].some(
             (r) => r && blockedReasons.includes(String(r))
           );
-          if (matchedReason) {
-            console.warn(`[OCR] Model ${modelCandidate} blocked by safety policy: blockReason=${blockReason}, finishReason=${finishReason}`);
+          if (isSafety) {
+            console.warn(`[OCR] Model ${modelCandidate} blocked by safety policy: blockReason=${blockReason}, finishReason=${currentFinishReason}`);
             const safetyErr: any = new Error('SAFETY_BLOCKED');
             safetyErr.code = 'SAFETY_BLOCKED';
             throw safetyErr;
           }
+
+          if (currentFinishReason === 'RECITATION') {
+            const recitationErr: any = new Error('RECITATION');
+            recitationErr.code = 'RECITATION';
+            throw recitationErr;
+          }
+
+          // 응답이 비었고 사유가 없으면 EMPTY_RESPONSE
+          const emptyErr: any = new Error('EMPTY_RESPONSE');
+          emptyErr.code = 'EMPTY_RESPONSE';
+          throw emptyErr;
         }
 
-        pageData = extractJson(responseText);
+        const blockedReasons = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'IMAGE_SAFETY'];
+        if ([blockReason, currentFinishReason].some((r) => r && blockedReasons.includes(String(r)))) {
+          console.warn(`[OCR] Model ${modelCandidate} blocked by safety policy: blockReason=${blockReason}, finishReason=${currentFinishReason}`);
+          const safetyErr: any = new Error('SAFETY_BLOCKED');
+          safetyErr.code = 'SAFETY_BLOCKED';
+          throw safetyErr;
+        }
+
+        if (currentFinishReason === 'RECITATION') {
+          const recitationErr: any = new Error('RECITATION');
+          recitationErr.code = 'RECITATION';
+          throw recitationErr;
+        }
+
+        try {
+          pageData = extractJson(responseText);
+        } catch {
+          console.warn(
+            `[OCR] extractJson failed: length=${responseText.length}, finishReason=${currentFinishReason}`
+          );
+          const parseErr: any = new Error('JSON_PARSE');
+          parseErr.code = 'JSON_PARSE';
+          throw parseErr;
+        }
+
         console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
         break;
       } catch (err: any) {
-        let isSafety = err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED';
-        if (!isSafety) {
+        let code: AnalyzeErrorCode = 'UNKNOWN';
+        if (err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED') {
+          code = 'SAFETY_BLOCKED';
+        } else if (err?.code === 'RECITATION' || err?.message === 'RECITATION' || currentFinishReason === 'RECITATION') {
+          code = 'RECITATION';
+        } else if (err?.code === 'JSON_PARSE' || err?.message === 'JSON_PARSE') {
+          code = 'JSON_PARSE';
+        } else if (err?.code === 'EMPTY_RESPONSE' || err?.message === 'EMPTY_RESPONSE') {
+          code = 'EMPTY_RESPONSE';
+        } else {
           const errMsg = String(err?.message || '');
           const blockedReasons = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'IMAGE_SAFETY'];
           if (blockedReasons.some((r) => errMsg.includes(r))) {
-            isSafety = true;
-            err.code = 'SAFETY_BLOCKED';
+            code = 'SAFETY_BLOCKED';
+          } else {
+            // 호출 자체의 예외는 MODEL_FAILED로 분류한다.
+            code = 'MODEL_FAILED';
           }
         }
-        console.warn(`[OCR] Model ${modelCandidate} failed:`, isSafety ? 'SAFETY_BLOCKED' : (err.message || err));
-        lastError = err;
-        modelErrors.push(err);
+
+        console.warn(`[OCR] Model ${modelCandidate} failed with code: ${code}`);
+        modelAttempts.push({ model: modelCandidate, code });
       }
     }
 
     if (!pageData) {
-      const allBlockedBySafety = modelErrors.length > 0 && modelErrors.every(
-        (e) => e?.code === 'SAFETY_BLOCKED' || e?.message === 'SAFETY_BLOCKED'
-      );
-      if (allBlockedBySafety) {
-        const safetyError: any = new Error('SAFETY_BLOCKED');
-        safetyError.code = 'SAFETY_BLOCKED';
-        throw safetyError;
+      let finalCode: AnalyzeErrorCode = 'UNKNOWN';
+      if (modelAttempts.some((a) => a.code === 'SAFETY_BLOCKED')) {
+        finalCode = 'SAFETY_BLOCKED';
+      } else if (modelAttempts.some((a) => a.code === 'RECITATION')) {
+        finalCode = 'RECITATION';
+      } else if (modelAttempts.some((a) => a.code === 'JSON_PARSE')) {
+        finalCode = 'JSON_PARSE';
+      } else if (modelAttempts.some((a) => a.code === 'EMPTY_RESPONSE')) {
+        finalCode = 'EMPTY_RESPONSE';
+      } else if (modelAttempts.some((a) => a.code === 'MODEL_FAILED')) {
+        finalCode = 'MODEL_FAILED';
       }
-      throw new Error(`Gemini 모델 분석 실패: ${lastError?.message || '모든 Gemini 모델 응답 불가'}`);
+
+      if (finalCode === 'SAFETY_BLOCKED') {
+        return res.status(400).json({
+          error: '이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요.',
+          code: 'SAFETY_BLOCKED',
+        });
+      }
+
+      return res.status(500).json({
+        error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.',
+        code: finalCode,
+      });
     }
 
     // 3. Persist lesson
@@ -1185,6 +1252,7 @@ app.post(
     if (err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED') {
       return res.status(400).json({
         error: '이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요.',
+        code: 'SAFETY_BLOCKED',
       });
     }
     console.error('Analyze error:', err);
@@ -1200,7 +1268,7 @@ app.post(
     if (errMsg.includes('File too large') || errMsg.includes('LIMIT_FILE_SIZE')) {
       return res.status(400).json({ error: '사진 파일 크기가 너무 큽니다. 더 작은 크기의 사진으로 올려주세요.' });
     }
-    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
+    res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.', code: 'UNKNOWN' });
   }
 });
 
