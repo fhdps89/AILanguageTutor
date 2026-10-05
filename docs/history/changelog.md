@@ -1,8 +1,24 @@
 # 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
 
-> **공식 기준 빌드:** `build 20261004-multilingual-v2`  
+> **공식 기준 빌드:** `build 20261005-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)  
 > **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-10-05 KST] 사진 분석 실패 원인 분류 코드 체계 도입 & 동적 빌드 버전 연동
+- **사진 분석 실패 정밀 진단 로그 (`/api/analyze`):**
+  - 모델 응답 텍스트가 비어 있을 때 모델명, `promptFeedback.blockReason`, `candidates[0].finishReason`, `candidates` 개수를 `console.warn`으로 정밀 기록 (본문 및 이미지 제외).
+  - `extractJson` 파싱 실패 시 응답 텍스트 길이와 `finishReason`만 `console.warn`으로 기록하여 토큰 절단 여부 추적.
+- **표준 실패 원인 분류 코드 도입 (Standardized Failure Reason Codes):**
+  - 최종 분석 실패 응답 JSON에 `code` 필드 추가: `SAFETY_BLOCKED`, `RECITATION`, `EMPTY_RESPONSE`, `JSON_PARSE`, `MODEL_FAILED`, `UNKNOWN` 6종 한정.
+  - 두 모델 중 하나라도 `SAFETY_BLOCKED` 시 안전 안내 문구와 코드를 즉시 반환하도록 `some` 판정 적용.
+  - 오류 응답에 스택 트레이스, 모델명, 키, 내부 경로 노출 완전 차단.
+- **클라이언트 화면 오류 코드 표기 (`src/App.tsx`):**
+  - 분석 실패 시 서버 응답에 `code`가 포함되어 있을 경우 사용자 안내 배너 끝에 `(오류 코드: ...)` 형태로 표시.
+- **동적 빌드 버전 생성 시스템 (`server.ts`):**
+  - 하드코딩되었던 빌드 문자열을 소스 파일 최근 수정 시각(mtime) 기반 동적 생성 함수(`getBuildVersion()`)로 전환 (`YYYYMMDD-multilingual-HHmm`, KST 기준).
+  - 코드 변경 및 재기동 시 빌드 버전 태그가 실시간 자동 반영되도록 개선.
 
 ---
 

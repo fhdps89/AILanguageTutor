@@ -13,7 +13,7 @@ export function App() {
     activeEngine: 'Google Gemini Vision (gemini-3.8-flash)',
     currentProvider: 'gemini',
     currentModel: 'gemini-3.8-flash',
-    build: '20261004-multilingual-v2',
+    build: '20261005',
     hasGemini: true,
   });
 

@@ -20,7 +20,33 @@ const DEMO_JSON_PATH = path.join(APP_DIR, 'demo_page.json');
 const DEMO_CHINESE_JSON_PATH = path.join(APP_DIR, 'demo_chinese.json');
 const LIBRARY_PATH = path.join(CACHE_DIR, 'library.json');
 const TTS_CACHE_DIR = path.join(CACHE_DIR, 'tts');
-const BUILD_VERSION = '20261004-multilingual-v2';
+
+function getBuildVersion(): string {
+  if (process.env.BUILD_VERSION) {
+    return process.env.BUILD_VERSION.trim();
+  }
+  try {
+    const files = ['server.ts', 'src/App.tsx', 'src/types.ts', 'package.json'];
+    let latestMs = 0;
+    for (const f of files) {
+      const p = path.join(APP_DIR, f);
+      if (fs.existsSync(p)) {
+        const m = fs.statSync(p).mtimeMs;
+        if (m > latestMs) latestMs = m;
+      }
+    }
+    const d = new Date(latestMs || Date.now());
+    const kst = new Date(d.getTime() + (9 * 60 + d.getTimezoneOffset()) * 60000);
+    const yyyy = kst.getFullYear();
+    const mm = String(kst.getMonth() + 1).padStart(2, '0');
+    const dd = String(kst.getDate()).padStart(2, '0');
+    const hh = String(kst.getHours()).padStart(2, '0');
+    const min = String(kst.getMinutes()).padStart(2, '0');
+    return `${yyyy}${mm}${dd}-multilingual-${hh}${min}`;
+  } catch {
+    return '20261005-multilingual';
+  }
+}
 
 // Ensure required directories exist
 if (!fs.existsSync(CACHE_DIR)) {
@@ -709,7 +735,7 @@ app.get('/api/status', (_req: Request, res: Response) => {
     activeEngine: geminiKey ? `Google Gemini Vision (${visionModel})` : '미설정 (데모 가능)',
     currentProvider: 'gemini',
     currentModel: visionModel,
-    build: BUILD_VERSION,
+    build: getBuildVersion(),
     hasGemini: geminiKey,
   });
 });
