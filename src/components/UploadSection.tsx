@@ -14,7 +14,7 @@ interface UploadSectionProps {
 
 /**
  * Optimizes image client-side to max 2500px on the longest dimension
- * Preserves ultra-high OCR resolution while preventing mobile memory bottlenecks
+ * Handles EXIF orientation, mobile camera captures, and memory safety
  */
 export async function optimizeImageForOcr(file: File, maxDim = 2500): Promise<File> {
   return new Promise((resolve) => {
@@ -23,57 +23,107 @@ export async function optimizeImageForOcr(file: File, maxDim = 2500): Promise<Fi
       return resolve(file);
     }
 
-    const img = new Image();
-    const url = URL.createObjectURL(file);
+    // Try modern createImageBitmap (hardware-accelerated, auto EXIF orient, off-thread)
+    if (typeof createImageBitmap === 'function') {
+      createImageBitmap(file, { imageOrientation: 'from-image' })
+        .then((bitmap) => {
+          let { width, height } = bitmap;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
 
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            bitmap.close();
+            return resolve(file);
+          }
 
-      // Only downscale if exceeds 3000px
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(bitmap, 0, 0, width, height);
+          bitmap.close();
 
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        return resolve(file);
-      }
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return resolve(file);
+              const safeName = (file.name || 'camera_photo').replace(/\.[^/.]+$/, '') + '.jpg';
+              resolve(new File([blob], safeName, { type: 'image/jpeg', lastModified: Date.now() }));
+            },
+            'image/jpeg',
+            0.88
+          );
+        })
+        .catch(() => {
+          fallbackImageLoad(file, maxDim, resolve);
+        });
+      return;
+    }
 
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) return resolve(file);
-          const optimizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
-            type: 'image/jpeg',
-            lastModified: Date.now(),
-          });
-          resolve(optimizedFile);
-        },
-        'image/jpeg',
-        0.88 // High quality for crisp text characters and diacritics
-      );
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-
-    img.src = url;
+    fallbackImageLoad(file, maxDim, resolve);
   });
+}
+
+function fallbackImageLoad(file: File, maxDim: number, resolve: (f: File) => void) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    let { width, height } = img;
+
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return resolve(file);
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return resolve(file);
+        const safeName = (file.name || 'camera_photo').replace(/\.[^/.]+$/, '') + '.jpg';
+        const optimizedFile = new File([blob], safeName, {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+        resolve(optimizedFile);
+      },
+      'image/jpeg',
+      0.88 // High quality for crisp text characters and diacritics
+    );
+  };
+
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    // If client cannot decode (e.g. raw HEIC on iOS), pass raw file to server where sharp handles it
+    resolve(file);
+  };
+
+  img.src = url;
 }
 
 export const UploadSection: React.FC<UploadSectionProps> = ({
@@ -97,7 +147,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      handleProcessFile(e.target.files[0]);
+      const file = e.target.files[0];
+      handleProcessFile(file);
+      e.target.value = '';
     }
   };
 
@@ -132,18 +184,18 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </span>
         </div>
 
-        {/* Hidden inputs */}
+        {/* Hidden inputs - explicit image/jpeg signals iOS to convert camera capture to JPEG */}
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/*"
           className="hidden"
           onChange={handleFileChange}
         />
         <input
           ref={cameraInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/*"
           capture="environment"
           className="hidden"
           onChange={handleFileChange}

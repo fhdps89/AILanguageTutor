@@ -6,6 +6,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import sharp from 'sharp';
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 
 dotenv.config();
@@ -996,6 +997,27 @@ app.get('/api/tts', async (req: Request, res: Response) => {
   }
 });
 
+async function normalizeUploadedImage(rawBuffer: Buffer): Promise<{ buffer: Buffer; mimeType: string }> {
+  try {
+    const normalizedBuffer = await sharp(rawBuffer)
+      .rotate() // Auto-orient based on EXIF tag so mobile camera shots are never sideways/upside-down
+      .resize(3000, 3000, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({
+        quality: 90,
+        mozjpeg: true,
+      })
+      .toBuffer();
+
+    return { buffer: normalizedBuffer, mimeType: 'image/jpeg' };
+  } catch (err) {
+    console.warn('[Image Normalization] sharp conversion failed, using raw buffer:', err);
+    return { buffer: rawBuffer, mimeType: 'image/jpeg' };
+  }
+}
+
 app.post(
   '/api/analyze',
   analyzeLimiter,
@@ -1024,6 +1046,11 @@ app.post(
     if (!imageBuffer || imageBuffer.length === 0) {
       return res.status(400).json({ error: 'No image uploaded' });
     }
+
+    // Auto-normalize image: decodes HEIC/HEIF/PNG/raw camera JPEG, auto-rotates EXIF orientation, and ensures Gemini Vision compatibility
+    const normalized = await normalizeUploadedImage(imageBuffer);
+    imageBuffer = normalized.buffer;
+    const imageMime = normalized.mimeType;
 
     const callerOwnerId = getOwnerId(req);
     const digest = crypto.createHash('sha256').update(imageBuffer).digest('hex');
@@ -1062,7 +1089,6 @@ app.post(
     const primaryModel = process.env.VISION_MODEL || 'gemini-3.8-flash';
     const fallbackModels = Array.from(new Set([primaryModel, 'gemini-3.6-flash']));
     const prompt = `${SYSTEM_PROMPT}\n\nDetect the source language of this document/book page photo and transcribe it verbatim into the required JSON learning structure with Korean learner annotations.`;
-    const imageMime = req.file?.mimetype && req.file.mimetype.startsWith('image/') ? req.file.mimetype : 'image/jpeg';
 
     const analyzeSafetySettings = [
       {

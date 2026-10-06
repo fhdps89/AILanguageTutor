@@ -1,8 +1,24 @@
 # 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
 
-> **공식 기준 빌드:** `build 20261005-multilingual`  
+> **공식 기준 빌드:** `build 20261006-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)  
 > **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-10-06 KST] 모바일 "카메라로 바로 촬영하기" 오류 해결 및 이미지 전처리 파이프라인 고도화
+- **문제 원인 분석 (Incident Diagnosis):**
+  - 모바일(iOS Safari 및 일부 Android)에서 `<input capture="environment">`로 실시간 촬영 시 기기 기본 포맷인 고효율 HEIC(`image/heic`) 또는 대용량 원본 스트림으로 제공됨.
+  - 갤러리 선택 시에는 OS 단에서 자동 JPEG 변환이 이뤄졌으나, 카메라 다이렉트 촬영 시에는 `image/heic` MIME 타입이 그대로 서버와 Gemini API로 전달되어 `400 INVALID_ARGUMENT (Unsupported MIME type)` 및 `MODEL_FAILED` 에러 발생.
+  - 모바일 카메라 촬영본의 EXIF Orientation(회전 태그)으로 인해 텍스트가 90도 회전되어 OCR 인식률이 저하되는 현상 존재.
+- **서버 이미지 자동 정규화 파이프라인 구축 (`server.ts`):**
+  - 고성능 이미지 프로세싱 라이브러리 `sharp` 도입.
+  - `/api/analyze` 진입 시 업로드된 모든 이미지에 대해 `.rotate()`(EXIF 방향 자동 교정), `.resize(3000, 3000, { fit: 'inside' })`(장변 3,000px 유지), `.jpeg({ quality: 90 })` 정규화 실행.
+  - HEIC/HEIF/PNG/대용량 카메라 촬영본 모두 Gemini Vision이 100% 수용 가능한 고화질 정방향 JPEG로 변환되어 전달.
+- **클라이언트 카메라 입력 & 캔버스 메모리 최적화 (`UploadSection.tsx`):**
+  - 파일 및 카메라 input의 `accept` 속성에 `image/jpeg,image/png,image/webp,image/*`를 명시하여 모바일 OS에 JPEG 인코딩 우선 힌트 제공.
+  - `optimizeImageForOcr` 함수에 오프스레드 하드웨어 가속 `createImageBitmap(file, { imageOrientation: 'from-image' })` 우선 적용 및 fallback 체인 구성으로 모바일 WebKit 캔버스 메모리 크래시 방어.
+  - 파일 선택/촬영 이벤트 후 input `value`를 리셋하여 동일 파일 또는 재촬영 시 `onChange` 이벤트가 정상 발화하도록 개선.
 
 ---
 

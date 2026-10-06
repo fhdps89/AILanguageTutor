@@ -1,7 +1,7 @@
 # AI 다국어 쉐도잉 튜터 (AI Multilingual Language Tutor)
 
-> **공식 빌드 버전:** `build 20261005-multilingual`  
-> **최신 업데이트 일자:** 2026-10-05 (KST)  
+> **공식 빌드 버전:** `build 20261006-multilingual`  
+> **최신 업데이트 일자:** 2026-10-06 (KST)  
 > **라이브 서비스:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
 
 외국어 원서나 교재 사진 한 장으로 언어를 자동 판독하고, **Google Gemini Native Speech** 기반의 고음질 원어민 음성으로 문장마다 듣고 따라 읽는 지능형 다국어 쉐도잉 학습 웹 애플리케이션입니다.
