@@ -1,7 +1,7 @@
 # AI 어학 튜터 (AI Language Tutor) — 프로젝트 컨텍스트
 
-> **공식 빌드 버전:** `build 20261006-multilingual`  
-> **최신 업데이트 일자:** 2026-10-06 (KST)  
+> **공식 빌드 버전:** `build 20261008-multilingual`  
+> **최신 업데이트 일자:** 2026-10-08 (KST)  
 > **공식 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)  
 > **아키텍처 표준:** 계층화 문서화 및 배포 격리 아키텍처 (루트 문서 5KB 미만 유지, 모든 기록 일자 KST 기준)
 
@@ -43,7 +43,7 @@
                                     [Gemini Native TTS Engine]
                                     • gemini-3.8-flash-lite-tts (Kore)
                                     • 0.75x / 0.5x 네이티브 스타일 발화
-                                    • SHA-256 디스크 캐시 (3ms 응답) & 일일 한도 방어
+                                    • SHA-256 캐시 & 쿼터 방어 (사진 30장/음성 40회)
 ```
 
 ---

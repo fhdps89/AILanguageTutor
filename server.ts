@@ -68,7 +68,7 @@ const DAILY_LIMITS = {
   TTS_GLOBAL_MAX: 80,       // 서버 전체 일일 음성 생성 한도 (Google 약 100회 한도 대비 사전 차단)
   TTS_DEVICE_MAX: 40,       // 기기당 일일 음성 생성 한도
   TTS_ANONYMOUS_MAX: 10,    // 식별자 없는 anonymous 일일 음성 생성 한도
-  ANALYZE_DEVICE_MAX: 10,   // 기기당 일일 사진 분석 한도
+  ANALYZE_DEVICE_MAX: 30,   // 기기당 일일 사진 분석 한도
   ANALYZE_ANONYMOUS_MAX: 3, // 식별자 없는 anonymous 일일 사진 분석 한도
 };
 

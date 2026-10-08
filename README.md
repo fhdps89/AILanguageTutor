@@ -1,7 +1,7 @@
 # AI 다국어 쉐도잉 튜터 (AI Multilingual Language Tutor)
 
-> **공식 빌드 버전:** `build 20261006-multilingual`  
-> **최신 업데이트 일자:** 2026-10-06 (KST)  
+> **공식 빌드 버전:** `build 20261008-multilingual`  
+> **최신 업데이트 일자:** 2026-10-08 (KST)  
 > **라이브 서비스:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
 
 외국어 원서나 교재 사진 한 장으로 언어를 자동 판독하고, **Google Gemini Native Speech** 기반의 고음질 원어민 음성으로 문장마다 듣고 따라 읽는 지능형 다국어 쉐도잉 학습 웹 애플리케이션입니다.
@@ -17,7 +17,7 @@
    - `gemini-3.8-flash-lite-tts` (Voice: `Kore`) 기반 원어민 고음질 육성.
    - 브라우저 WSOLA 노이즈 없는 **0.75x / 0.5x 네이티브 감속 발화** (`speechMetadata.style`).
    - SHA-256 디스크 캐싱 (`./cache/tts/`)을 통한 3ms 초고속 스트리밍.
-   - **일일 쿼터 사전 방어:** 캐시 히트 바이패스, 기기별/서버별 일일 상한, HTTP 429 친절한 안내 및 CORS 보안.
+   - **일일 쿼터 사전 방어:** 캐시 히트 바이패스, 기기별 일일 상한(기기당 사진 분석 30장, 음성 40회), HTTP 429 친절한 안내 및 CORS 보안.
 3. **학습자 몰입형 인터랙션**
    - **60fps 노래방 칼싱크 (Karaoke Sync):** 원문 서체/줄바꿈 유지 실시간 단어 하이라이트.
    - **문장 릴레이 플레이어:** 문장 간 350ms 자연스러운 호흡을 둔 전체 본문 연속 낭독.

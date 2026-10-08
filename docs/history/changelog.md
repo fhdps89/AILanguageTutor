@@ -1,8 +1,16 @@
 # 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
 
-> **공식 기준 빌드:** `build 20261006-multilingual`  
+> **공식 기준 빌드:** `build 20261008-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)  
 > **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-10-08 KST] 기기당 일일 사진 분석 한도 상향 (10장 ➔ 30장)
+- **기기별 사진 분석 쿼터 상향 (`server.ts`):**
+  - 사용자 피드백 반영: 기기당 일일 사진 분석 한도(`DAILY_LIMITS.ANALYZE_DEVICE_MAX`)를 기존 10회에서 30회로 상향.
+  - 익명 기기 한도(`ANALYZE_ANONYMOUS_MAX`: 3회) 및 음성 합성(TTS) 쿼터는 기존 수치 유지.
+  - 쿼터 로깅 포맷: `[Analyze Quota] Device '...': n/30`으로 분모 30 반영.
 
 ---
 
