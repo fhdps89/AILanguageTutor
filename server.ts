@@ -163,6 +163,73 @@ function checkAndIncrementAnalyzeLimit(deviceId: string) {
   console.log(`[Analyze Quota] Device '${safeId}': ${currentDeviceCount + 1}/${maxForDevice}`);
 }
 
+interface QuotaInfo {
+  analyze: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  tts: {
+    used: number;
+    limit: number;
+    remaining: number;
+    blockedBy: 'global' | 'device' | null;
+  };
+  resetAt: string;
+}
+
+function getRemainingQuota(deviceId: string): QuotaInfo {
+  const state = getDailyState();
+  const safeId = (deviceId || 'anonymous').trim() || 'anonymous';
+  const isAnonymous = safeId === 'anonymous';
+
+  // 1. Analyze quota
+  const analyzeLimit = isAnonymous ? DAILY_LIMITS.ANALYZE_ANONYMOUS_MAX : DAILY_LIMITS.ANALYZE_DEVICE_MAX;
+  const analyzeUsed = state.deviceAnalyzeCounts.get(safeId) || 0;
+  const analyzeRemaining = Math.max(analyzeLimit - analyzeUsed, 0);
+
+  // 2. TTS quota
+  const ttsLimit = isAnonymous ? DAILY_LIMITS.TTS_ANONYMOUS_MAX : DAILY_LIMITS.TTS_DEVICE_MAX;
+  const ttsUsed = state.deviceTtsCounts.get(safeId) || 0;
+  const deviceRemaining = Math.max(ttsLimit - ttsUsed, 0);
+  const globalRemaining = Math.max(DAILY_LIMITS.TTS_GLOBAL_MAX - state.globalTtsCount, 0);
+  const ttsRemaining = Math.max(Math.min(deviceRemaining, globalRemaining), 0);
+
+  let blockedBy: 'global' | 'device' | null = null;
+  if (ttsRemaining === 0) {
+    if (globalRemaining <= 0) {
+      blockedBy = 'global';
+    } else if (deviceRemaining <= 0) {
+      blockedBy = 'device';
+    }
+  }
+
+  // 3. Reset time (Next midnight in KST)
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const targetDate = new Date(utcMs + DAILY_RESET_TZ_OFFSET_HOURS * 3600000);
+  const yyyy = targetDate.getFullYear();
+  const mm = targetDate.getMonth();
+  const dd = targetDate.getDate();
+  const nextMidnightUtcMs = Date.UTC(yyyy, mm, dd + 1) - DAILY_RESET_TZ_OFFSET_HOURS * 3600000;
+  const resetAt = new Date(nextMidnightUtcMs).toISOString();
+
+  return {
+    analyze: {
+      used: analyzeUsed,
+      limit: analyzeLimit,
+      remaining: analyzeRemaining,
+    },
+    tts: {
+      used: ttsUsed,
+      limit: ttsLimit,
+      remaining: ttsRemaining,
+      blockedBy,
+    },
+    resetAt,
+  };
+}
+
 // Security: Express rate limiting (DDoS & rapid burst protection)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -739,6 +806,12 @@ app.get('/api/status', (_req: Request, res: Response) => {
     build: getBuildVersion(),
     hasGemini: geminiKey,
   });
+});
+
+app.get('/api/quota', (req: Request, res: Response) => {
+  const deviceId = getOwnerId(req);
+  const quota = getRemainingQuota(deviceId);
+  res.json(quota);
 });
 
 app.get('/api/demo', async (req: Request, res: Response) => {

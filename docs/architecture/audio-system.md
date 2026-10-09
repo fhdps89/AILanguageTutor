@@ -76,3 +76,11 @@ Gemini Tier 2 기준 음성 모델(Gemini 3.8 Flash Lite TTS)의 일일 요청 �
 - 한도 도달 시 `HTTP 429`와 에러 코드(`TTS_DEVICE_LIMIT` 또는 `TTS_GLOBAL_LIMIT`) 및 친절한 한국어 안내 문구를 반환합니다.
 - 클라이언트는 429 수신 시 브라우저 내장 합성기(Web Speech API)로 몰래 전환하지 않고, `ai-tutor-rate-limit` 커스텀 이벤트를 발생시켜 상단 고정 안내 배너를 통해 사용자에게 상황을 명확히 고지합니다.
 
+### 5.4 잔여 쿼터 실시간 조회 (`GET /api/quota`)
+- 사용자의 당일 남은 분석/음성 생성 가능량을 투명하게 확인할 수 있도록 읽기 전용 API를 제공합니다.
+- **반환 데이터:**
+  - `analyze`: `{ used, limit, remaining }`
+  - `tts`: `{ used, limit, remaining, blockedBy }` (`blockedBy`: 잔여 0일 때 `'global'` | `'device'` | null)
+  - `resetAt`: KST 자정 기준 다음 일일 초기화 시각 (ISO 문자열)
+- 서버 전체 누적량은 응답에 포함하지 않으며, 조회 호출 시 일일 카운터를 절대 증가시키지 않습니다.
+
