@@ -40,12 +40,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onChange={(e) => onDemoChange(e.target.checked)}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
           />
-          <div className="text-xs">
+          <div className="text-sm">
             <span className="font-semibold text-indigo-950 flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-indigo-600" />
               데모 무료 체험 모드
             </span>
-            <p className="text-[11px] text-slate-600 mt-1">
+            <p className="text-sm text-slate-600 mt-1">
               사진 업로드 없이도 실제 쉐도잉과 네이티브 발음 및 구문 분석을 즉시 체험할 수 있습니다.
             </p>
           </div>
@@ -53,12 +53,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {demoChecked && onSelectDemoLang && (
           <div className="mt-3 pt-2.5 border-t border-indigo-100/80 space-y-1.5">
-            <span className="text-[11px] font-bold text-slate-600 block">체험할 데모 교재 선택:</span>
+            <span className="text-sm font-bold text-slate-600 block">체험할 데모 교재 선택:</span>
             <div className="grid grid-cols-1 gap-1.5">
               <button
                 type="button"
                 onClick={() => onSelectDemoLang('zh')}
-                className={`flex items-center justify-between p-2 rounded-md text-xs border text-left transition cursor-pointer ${
+                className={`flex items-center justify-between p-2 rounded-md text-sm border text-left transition cursor-pointer ${
                   demoLang === 'zh'
                     ? 'bg-amber-600 text-white font-semibold border-amber-700 shadow-2xs'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>중국어: 베이징 고궁 자금성</span>
                 </span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                  className={`text-xs px-1.5 py-0.2 rounded font-bold ${
                     demoLang === 'zh' ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-800'
                   }`}
                 >
@@ -80,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectDemoLang('fr')}
-                className={`flex items-center justify-between p-2 rounded-md text-xs border text-left transition cursor-pointer ${
+                className={`flex items-center justify-between p-2 rounded-md text-sm border text-left transition cursor-pointer ${
                   demoLang === 'fr'
                     ? 'bg-indigo-600 text-white font-semibold border-indigo-700 shadow-2xs'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'

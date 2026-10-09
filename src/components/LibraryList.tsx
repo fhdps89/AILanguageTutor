@@ -27,16 +27,16 @@ export const LibraryList: React.FC<LibraryListProps> = ({
     <div className="space-y-3">
       {!isSheet && (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
             <History className="h-3.5 w-3.5 text-indigo-500" />
             <span>내 서재 (학습 기록)</span>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">{library.length}개 교재</span>
+          <span className="text-xs font-mono text-slate-600">{library.length}개 교재</span>
         </div>
       )}
 
       {library.length === 0 ? (
-        <div className={`rounded-lg border border-dashed border-slate-200 p-4 text-center text-slate-400 ${isSheet ? 'text-sm' : 'text-xs'}`}>
+        <div className={`rounded-lg border border-dashed border-slate-200 p-4 text-center text-slate-600 text-sm`}>
           저장된 학습 페이지가 없습니다. 사진을 업로드하거나 데모를 열어보세요.
         </div>
       ) : (
@@ -51,7 +51,7 @@ export const LibraryList: React.FC<LibraryListProps> = ({
               <div
                 key={item.key}
                 className={`group relative flex items-center justify-between rounded-lg p-2.5 transition border cursor-pointer ${
-                  isSheet ? 'min-h-16 text-sm' : 'text-xs'
+                  isSheet ? 'min-h-16 text-sm' : 'text-sm'
                 } ${
                   isSelected
                     ? 'border-indigo-600 bg-indigo-50/60 font-medium text-indigo-950 ring-1 ring-indigo-500/20'
@@ -74,7 +74,7 @@ export const LibraryList: React.FC<LibraryListProps> = ({
                       </span>
                     )}
                   </span>
-                  <span className={`mt-0.5 ${isSheet ? 'text-sm text-slate-500' : 'text-[11px] text-slate-400'}`}>
+                  <span className={`mt-0.5 ${isSheet ? 'text-sm text-slate-600' : 'text-xs text-slate-600'}`}>
                     {langName ? `${langName} · ` : ''}{item.n_sentences}개 문장 · {item.saved_at.slice(0, 10)}
                   </span>
                 </button>
@@ -87,7 +87,7 @@ export const LibraryList: React.FC<LibraryListProps> = ({
                         e.stopPropagation();
                         onDeleteLesson(item.key, item.book_title || item.title);
                       }}
-                      className={`rounded text-slate-400 transition hover:bg-rose-100 hover:text-rose-600 ${
+                      className={`rounded text-slate-500 transition hover:bg-rose-100 hover:text-rose-600 ${
                         isSheet ? 'p-2.5 opacity-100' : 'p-1 opacity-60 group-hover:opacity-100'
                       }`}
                       title="서재에서 이 교재 삭제"

@@ -238,7 +238,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
             <label className="block text-sm font-semibold text-slate-800">
               교재 또는 원서 사진 등록
             </label>
-            <span className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
               <Languages className="h-3 w-3" />
               다국어 자동 언어 감지 & Vision OCR
             </span>
@@ -297,7 +297,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
                 <div className="text-xs text-slate-600">
                   <span className="font-semibold text-indigo-600">사진 파일 선택</span> 또는 드래그하여 업로드
                 </div>
-                <p className="text-[11px] text-slate-400 max-w-md">
+                <p className="text-sm text-slate-600 max-w-md">
                   스마트폰으로 책 페이지를 찍어 올리면 문장 카드와 AI 합성 음성으로 바꿔 줍니다 (장변 3,000px 정밀 분석 지원).
                 </p>
               </>
@@ -400,7 +400,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
           )}
 
           {isLoading && (
-            <div className="flex items-center gap-2 text-xs text-slate-600">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
               <span>{loadingMessage}</span>
             </div>

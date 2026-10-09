@@ -83,13 +83,13 @@ export const LibrarySheet: React.FC<LibrarySheetProps> = ({
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-bold text-slate-900">내 서재 (학습 기록)</h2>
             <div className="flex items-center gap-1">
-              <span className="text-sm font-mono text-slate-500">{library.length}개 교재</span>
+              <span className="text-sm font-mono text-slate-600">{library.length}개 교재</span>
               <button
                 ref={closeRef}
                 type="button"
                 onClick={onClose}
                 aria-label="닫기"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
