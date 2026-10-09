@@ -8,6 +8,7 @@ import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
+import { upsertOwnerRow, canAccessLesson, planLessonDelete } from './libraryRules';
 
 dotenv.config();
 
@@ -577,6 +578,37 @@ async function saveLibraryAsync(items: any[]) {
   }
 }
 
+// library.json 읽기-고치기-쓰기를 한 줄로 세워 실행한다(이 서버 프로세스 안에서 동시 요청이 서로의 변경을 덮어쓰지 않게).
+let libraryWriteChain: Promise<unknown> = Promise.resolve();
+function updateLibraryAsync<R>(mutate: (lib: any[]) => Promise<{ next: any[] | null; result: R }>): Promise<R> {
+  const run = libraryWriteChain.then(async () => {
+    const lib = await loadLibraryAsync();
+    const { next, result } = await mutate(lib);
+    if (next) await saveLibraryAsync(next);
+    return result;
+  });
+  libraryWriteChain = run.catch(() => {});
+  return run;
+}
+
+// 서재 항목 하나를 만든다(새 분석과 캐시 재사용이 같은 모양을 쓰도록).
+function buildLibraryRow(cacheKey: string, pageData: any, ownerId: string) {
+  const title = pageData?.title || `Lesson ${cacheKey}`;
+  const now = new Date().toISOString();
+  return {
+    key: cacheKey,
+    title: `${title}_${now.slice(0, 10)}`,
+    book_title: title,
+    page_no: 1,
+    created_at: now,
+    source: 'photo',
+    n_sentences: pageData?.sentences?.length || 0,
+    saved_at: now,
+    language: pageData?.language,
+    ownerId,
+  };
+}
+
 function normalizePage(data: any): any {
   if (!data || typeof data !== 'object') {
     throw new Error('Vision response is not an object');
@@ -1108,11 +1140,11 @@ app.get('/api/lesson/:key', async (req: Request, res: Response) => {
   }
 
   // Security check: non-demo lessons must match owner
+  // 같은 사진을 여러 사람이 올리면 키 하나에 항목이 여러 개라, 그중 하나라도 내 것이면 연다.
   if (safeKey !== 'demo-arc' && safeKey !== 'demo-chinese') {
     const callerOwnerId = getOwnerId(req);
     const fullLib = await loadLibraryAsync();
-    const item = fullLib.find((l) => l.key === safeKey);
-    if (item && item.ownerId && item.ownerId !== callerOwnerId) {
+    if (!canAccessLesson(fullLib, safeKey, callerOwnerId)) {
       return res.status(403).json({ error: '접근 권한이 없는 교재입니다.' });
     }
   }
@@ -1147,28 +1179,32 @@ app.delete('/api/lesson/:key', async (req: Request, res: Response) => {
   }
 
   const callerOwnerId = getOwnerId(req);
-  const currentLib = await loadLibraryAsync();
-  const targetItem = currentLib.find((item: any) => item.key === safeKey);
 
-  // Enforce ownership: only the creator can delete their lesson
-  if (targetItem && targetItem.ownerId && targetItem.ownerId !== callerOwnerId) {
+  // 내 서재 항목만 뺀다. 같은 사진을 올린 다른 사람 항목이 남아 있으면 사진·본문 폴더는 지우지 않는다.
+  const outcome = await updateLibraryAsync(async (currentLib) => {
+    const plan = planLessonDelete(currentLib, safeKey, callerOwnerId);
+    // Enforce ownership: only the creator can delete their lesson
+    if (!plan.allowed) return { next: null, result: null };
+
+    if (plan.removeFolder) {
+      // Delete cached directory if it exists (아무 항목도 이 키를 가리키지 않을 때만)
+      const lessonFolder = path.join(CACHE_DIR, safeKey);
+      if (fs.existsSync(lessonFolder)) {
+        try {
+          await fs.promises.rm(lessonFolder, { recursive: true, force: true });
+        } catch (e) {
+          console.warn('Failed to delete lesson folder from disk', e);
+        }
+      }
+    }
+    return { next: plan.nextLib, result: plan.nextLib.length };
+  });
+
+  if (outcome === null) {
     return res.status(403).json({ error: '본인이 등록한 교재만 삭제할 수 있습니다.' });
   }
 
-  // Delete cached directory if it exists
-  const lessonFolder = path.join(CACHE_DIR, safeKey);
-  if (fs.existsSync(lessonFolder)) {
-    try {
-      await fs.promises.rm(lessonFolder, { recursive: true, force: true });
-    } catch (e) {
-      console.warn('Failed to delete lesson folder from disk', e);
-    }
-  }
-
-  const updatedLib = currentLib.filter((item: any) => item.key !== safeKey);
-  await saveLibraryAsync(updatedLib);
-
-  res.json({ success: true, key: safeKey, remaining: updatedLib.length });
+  res.json({ success: true, key: safeKey, remaining: outcome });
 });
 
 app.get('/api/photo/:key', (req: Request, res: Response) => {
@@ -1336,6 +1372,12 @@ app.post(
         try {
           const cachedRaw = await fs.promises.readFile(pageJsonFile, 'utf-8');
           const cachedData = JSON.parse(cachedRaw);
+
+          // 다른 사람이 먼저 올린 같은 사진이어도 내 서재에 내 항목을 남긴다(모델 호출·한도 차감 없음).
+          await updateLibraryAsync(async (currentLib) => ({
+            next: upsertOwnerRow(currentLib, buildLibraryRow(cacheKey, cachedData, callerOwnerId)),
+            result: null,
+          }));
 
           return res.json({
             key: cacheKey,
@@ -1559,23 +1601,11 @@ app.post(
     await fs.promises.writeFile(path.join(lessonFolder, 'page.jpg'), imageBuffer);
 
     // 4. Update library with ownerId (bridge for user isolation & Google SSO)
-    const currentLib = await loadLibraryAsync();
-    const filteredLib = currentLib.filter(item => item.key !== cacheKey);
-    const title = pageData.title || `Lesson ${cacheKey}`;
-    const row = {
-      key: cacheKey,
-      title: `${title}_${new Date().toISOString().slice(0, 10)}`,
-      book_title: title,
-      page_no: 1,
-      created_at: new Date().toISOString(),
-      source: 'photo',
-      n_sentences: pageData.sentences?.length || 0,
-      saved_at: new Date().toISOString(),
-      language: pageData.language,
-      ownerId: callerOwnerId,
-    };
-    filteredLib.unshift(row);
-    await saveLibraryAsync(filteredLib.slice(0, 50));
+    // 내 항목만 갈아 끼우고, 50개 제한은 사용자별로 건다(다른 사람 항목은 빼지 않음).
+    await updateLibraryAsync(async (currentLib) => ({
+      next: upsertOwnerRow(currentLib, buildLibraryRow(cacheKey, pageData, callerOwnerId)),
+      result: null,
+    }));
 
     // 5. Efficient background warming: only first 3 sentences 1.0x (No wasteful full-passage synthesis)
     setTimeout(async () => {
