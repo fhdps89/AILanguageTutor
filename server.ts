@@ -1601,7 +1601,7 @@ app.post(
     await fs.promises.writeFile(path.join(lessonFolder, 'page.jpg'), imageBuffer);
 
     // 4. Update library with ownerId (bridge for user isolation & Google SSO)
-    // 내 항목만 갈아 끼우고, 50개 제한은 사용자별로 건다(다른 사람 항목은 빼지 않음).
+    // 내 항목만 갈아 끼운다(서재 개수 제한 없음, 다른 사람 항목은 건드리지 않음).
     await updateLibraryAsync(async (currentLib) => ({
       next: upsertOwnerRow(currentLib, buildLibraryRow(cacheKey, pageData, callerOwnerId)),
       result: null,
