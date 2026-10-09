@@ -1,6 +1,6 @@
 import React from 'react';
 import { LibraryItem, SystemStatus } from '../types';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { LibraryList } from './LibraryList';
 
 interface SidebarProps {
@@ -9,6 +9,7 @@ interface SidebarProps {
   onDemoChange: (val: boolean) => void;
   demoLang?: 'zh' | 'fr';
   onSelectDemoLang?: (lang: 'zh' | 'fr') => void;
+  onRunDemo: () => void;
   library: LibraryItem[];
   selectedKey: string | null;
   onSelectKey: (key: string) => void;
@@ -22,6 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDemoChange,
   demoLang = 'zh',
   onSelectDemoLang,
+  onRunDemo,
   library,
   selectedKey,
   onSelectKey,
@@ -92,6 +94,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={onRunDemo}
+              disabled={isLoading}
+              className={`mt-1 w-full flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer ${
+                demoLang === 'zh'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {demoLang === 'zh' ? '🇨🇳 중국어 데모 실행하기' : '🇫🇷 프랑스어 데모 실행하기'}
+            </button>
           </div>
         )}
       </div>

@@ -1,13 +1,10 @@
 import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, Loader2, Languages, Camera } from 'lucide-react';
+import { Upload, Image as ImageIcon, Loader2, Languages, Camera } from 'lucide-react';
 import { DailyQuota } from '../types';
 
 interface UploadSectionProps {
   selectedFile: File | null;
   onFileSelect: (file: File | null) => void;
-  demoChecked: boolean;
-  demoLang?: 'zh' | 'fr';
-  onRunDemo: () => void;
   onRunPhoto: () => void;
   isLoading: boolean;
   loadingMessage: string;
@@ -140,9 +137,6 @@ export interface UploadSectionHandle {
 export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>(({
   selectedFile,
   onFileSelect,
-  demoChecked,
-  demoLang = 'zh',
-  onRunDemo,
   onRunPhoto,
   isLoading,
   loadingMessage,
@@ -363,40 +357,25 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
         </div>
       )}
 
-      {(demoChecked || (!isPhotoLimitReached) || isLoading) && (
+      {(!isPhotoLimitReached || isLoading) && (
         <div className="flex flex-col sm:flex-row items-center gap-3">
-          {demoChecked ? (
-            <button
-              onClick={onRunDemo}
-              disabled={isLoading}
-              className={`w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer ${
-                demoLang === 'zh'
-                  ? 'bg-amber-600 hover:bg-amber-700'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              }`}
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {demoLang === 'zh' ? '🇨🇳 중국어 데모 실행하기' : '🇫🇷 프랑스어 데모 실행하기'}
-            </button>
-          ) : (
-            !isPhotoLimitReached && (
-              <div className="w-full sm:w-auto">
-                <button
-                  onClick={onRunPhoto}
-                  disabled={isLoading || !selectedFile}
-                  aria-describedby={!selectedFile && !isLoading ? 'generate-hint' : undefined}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  사진 언어 판독 & 쉐도잉 생성
-                </button>
-                {!selectedFile && !isLoading && (
-                  <p id="generate-hint" className="mt-1.5 text-sm text-slate-600">
-                    먼저 책 사진을 올려 주세요
-                  </p>
-                )}
-              </div>
-            )
+          {!isPhotoLimitReached && (
+            <div className="w-full sm:w-auto">
+              <button
+                onClick={onRunPhoto}
+                disabled={isLoading || !selectedFile}
+                aria-describedby={!selectedFile && !isLoading ? 'generate-hint' : undefined}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                사진 언어 판독 & 쉐도잉 생성
+              </button>
+              {!selectedFile && !isLoading && (
+                <p id="generate-hint" className="mt-1.5 text-sm text-slate-600">
+                  먼저 책 사진을 올려 주세요
+                </p>
+              )}
+            </div>
           )}
 
           {isLoading && (

@@ -597,15 +597,12 @@ export function App() {
           )}
           <UploadSection
             ref={uploadRef}
-            hidden={!currentPage && !isLoading && !selectedFile && !demoChecked && !(quota && quota.analyze.remaining === 0)}
+            hidden={!currentPage && !isLoading && !selectedFile && !(quota && quota.analyze.remaining === 0)}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
               setBurstLimitMessage(null);
             }}
-            demoChecked={demoChecked}
-            demoLang={demoLang}
-            onRunDemo={handleRunDemo}
             onRunPhoto={handleRunPhoto}
             isLoading={isLoading}
             loadingMessage={loadingMessage}
@@ -788,6 +785,7 @@ export function App() {
           onDemoChange={setDemoChecked}
           demoLang={demoLang}
           onSelectDemoLang={setDemoLang}
+          onRunDemo={handleRunDemo}
           library={library}
           selectedKey={selectedKey}
           onSelectKey={setSelectedKey}
