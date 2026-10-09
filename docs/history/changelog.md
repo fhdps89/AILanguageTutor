@@ -6,6 +6,27 @@
 
 ---
 
+## [2026-10-09 KST] 학습 화면 음성 잔여 횟수 카운터 및 음성 한도 소진 시 차분한 안내 UI 연동
+- **기능 배경 (Context):**
+  - 학습 화면에서 원어민 음성 재생 시 당일 남은 신규 음성 생성 가능 횟수를 실시간으로 확인하고, 일일 음성 한도 소진 시에도 기존 학습 문장의 재생은 계속 가능함을 사용자에게 명확히 안내.
+- **적용된 수정 내역 (`src/App.tsx`, `src/utils/audio.ts`, `src/components/UploadSection.tsx`):**
+  - `src/utils/audio.ts`:
+    - `/api/tts/prepare` 응답(200 성공 및 429 한도 도달)의 `quota` 객체를 감지하여 `ai-tutor-quota` CustomEvent 발송.
+  - `src/App.tsx`:
+    - `ai-tutor-quota` 이벤트 수신 핸들러 추가하여 음성 생성 시 잔여 쿼터 실시간 차감 반영.
+    - `ai-tutor-rate-limit` 수신 시 `quota.tts.remaining`을 0으로 변경하고 `blockedBy`('global' | 'device') 갱신.
+    - 문장 카드 목록 상단 제목부 우측에 `"음성 M회 남음"` 카운터 추가 (14px `text-sm`, `text-slate-600`, 10회 이하 시 `text-amber-700` 강조, `aria-live="polite"`).
+  - `src/components/UploadSection.tsx`:
+    - `quota.tts.remaining === 0`일 때 사진 업로드는 차단하지 않고 정상 허용.
+    - 업로드 칸 아래 쿼터 표시선에서 음성 텍스트 자리에 회색 친절 안내 문구 렌더링:
+      - `device`: `"오늘 새로 만들 수 있는 음성을 다 썼어요. 이미 들은 문장은 계속 들을 수 있고, 밤 12시(한국 시간)에 다시 {limit}회가 채워져요."`
+      - `global`: `"오늘은 많은 분이 이용해서 새 음성이 잠시 쉬고 있어요. 이미 들은 문장은 계속 들을 수 있어요."`
+- **접근성 및 안정성 보존 (Accessibility & Safety):**
+  - 안내 텍스트 14px(`text-sm`), WCAG AA 명도 대비(slate-600: 7:1) 및 `aria-live="polite"` 적용.
+  - 서버 코드 및 `TTS_DEVICE_MAX: 100`, `TTS_GLOBAL_MAX: 500` 상수 온전히 보존.
+
+---
+
 ## [2026-10-09 KST] 일일 사진 분석 한도 소진 시 차분한 안내 카드(Calm Limit Card) 및 접근성 개선
 - **기능 배경 (Context):**
   - 일일 사진 분석 한도(30장) 소진 시 위협적인 빨간색 오류 배너 대신, 소진 사유와 KST 자정 리셋 시각, 서재 학습을 유도하는 차분한 안내 카드를 제공하여 사용자 경험 극대화.

@@ -309,22 +309,35 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       {quota && (
         <div
           aria-live="polite"
-          className="mt-2 flex items-center justify-end text-sm text-slate-600 flex-wrap gap-x-1"
+          className="mt-2 text-sm text-slate-600 text-right"
         >
-          <span>오늘</span>
-          <span className={quota.analyze.remaining <= 5 ? 'text-amber-700 font-medium' : ''}>
-            사진 {quota.analyze.remaining}장 남음
-            {quota.analyze.remaining <= 5 && (
-              <span className="text-xs ml-1 font-normal">(자정에 다시 {quota.analyze.limit}장)</span>
+          <div className="flex items-center justify-end flex-wrap gap-x-1">
+            <span>오늘</span>
+            <span className={quota.analyze.remaining <= 5 ? 'text-amber-700 font-medium' : ''}>
+              사진 {quota.analyze.remaining}장 남음
+              {quota.analyze.remaining <= 5 && (
+                <span className="text-xs ml-1 font-normal">(자정에 다시 {quota.analyze.limit}장)</span>
+              )}
+            </span>
+            {quota.tts.remaining > 0 && (
+              <>
+                <span className="text-slate-400 mx-0.5">·</span>
+                <span className={quota.tts.remaining <= 10 ? 'text-amber-700 font-medium' : ''}>
+                  음성 {quota.tts.remaining}회 남음
+                  {quota.tts.remaining <= 10 && (
+                    <span className="text-xs ml-1 font-normal">(처음 듣는 문장만 줄어요)</span>
+                  )}
+                </span>
+              </>
             )}
-          </span>
-          <span className="text-slate-400 mx-0.5">·</span>
-          <span className={quota.tts.remaining <= 10 ? 'text-amber-700 font-medium' : ''}>
-            음성 {quota.tts.remaining}회 남음
-            {quota.tts.remaining <= 10 && (
-              <span className="text-xs ml-1 font-normal">(처음 듣는 문장만 줄어요)</span>
-            )}
-          </span>
+          </div>
+          {quota.tts.remaining === 0 && (
+            <p className="mt-1 text-sm text-slate-600 leading-relaxed">
+              {quota.tts.blockedBy === 'global'
+                ? '오늘은 많은 분이 이용해서 새 음성이 잠시 쉬고 있어요. 이미 들은 문장은 계속 들을 수 있어요.'
+                : `오늘 새로 만들 수 있는 음성을 다 썼어요. 이미 들은 문장은 계속 들을 수 있고, 밤 12시(한국 시간)에 다시 ${quota.tts.limit}회가 채워져요.`}
+            </p>
+          )}
         </div>
       )}
 

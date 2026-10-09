@@ -100,16 +100,39 @@ export function App() {
     fetchQuota();
     fetchLibraryAndLoadLatest();
 
+    const handleQuota = (e: any) => {
+      if (e.detail) {
+        setQuota(e.detail);
+      }
+    };
+
     const handleRateLimit = (e: any) => {
       const msg = e.detail?.message || '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.';
+      const code = e.detail?.code;
+      const blockedBy: 'global' | 'device' = code === 'TTS_GLOBAL_LIMIT' ? 'global' : 'device';
+
+      setQuota((prev) =>
+        prev
+          ? {
+              ...prev,
+              tts: {
+                ...prev.tts,
+                remaining: 0,
+                blockedBy,
+              },
+            }
+          : null
+      );
+
       setErrorMessage(msg);
       setErrorCode(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      fetchQuota();
     };
 
+    window.addEventListener('ai-tutor-quota', handleQuota);
     window.addEventListener('ai-tutor-rate-limit', handleRateLimit);
     return () => {
+      window.removeEventListener('ai-tutor-quota', handleQuota);
       window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
     };
   }, []);
@@ -662,13 +685,20 @@ export function App() {
 
               {/* Sentence Breakdown List */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
                     문장별 쉐도잉 훈련 ({currentPage.sentences?.length || 0}문장)
                   </h3>
-                  <span className="text-xs text-slate-500">
-                    원문 청취(1.0x) 및 배속 조절(0.75x / 0.5x)
-                  </span>
+                  {quota && (
+                    <span
+                      aria-live="polite"
+                      className={`text-sm font-medium ${
+                        quota.tts.remaining <= 10 ? 'text-amber-700' : 'text-slate-600'
+                      }`}
+                    >
+                      음성 {quota.tts.remaining}회 남음
+                    </span>
+                  )}
                 </div>
 
                 {currentPage.sentences?.map((sentence) => {

@@ -125,6 +125,13 @@ async function resolveAudioUrl(
     // If rate limit reached, notify UI and do not fall back to browser speech
     if (res.status === 429) {
       const errData = await res.json().catch(() => ({}));
+      if (errData.quota && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('ai-tutor-quota', {
+            detail: errData.quota,
+          })
+        );
+      }
       const message =
         errData.error ||
         (errData.code === 'TTS_GLOBAL_LIMIT'
@@ -147,6 +154,13 @@ async function resolveAudioUrl(
 
     if (res.ok) {
       const data = await res.json();
+      if (data.quota && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('ai-tutor-quota', {
+            detail: data.quota,
+          })
+        );
+      }
       if (data.audioUrl) {
         resolvedUrlCache.set(cacheKey, data.audioUrl);
         return data.audioUrl;
