@@ -8,6 +8,17 @@ import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
 
+// 예시 수업(demo-arc, demo-chinese)은 내 수업이 아니다. Sidebar의 isDemo 판단과 같은 기준.
+const isOwnLesson = (item: LibraryItem) => item.key !== 'demo-arc' && item.key !== 'demo-chinese';
+
+// 내 수업 중 가장 최근에 저장한 것. 내 수업이 없으면 null.
+const pickLatestOwn = (list: LibraryItem[]): LibraryItem | null => {
+  const own = list.filter(isOwnLesson);
+  if (own.length === 0) return null;
+  const stamp = (item: LibraryItem) => item.saved_at || item.created_at || '';
+  return own.reduce((latest, item) => (stamp(item) > stamp(latest) ? item : latest));
+};
+
 export function App() {
   const [status, setStatus] = useState<SystemStatus>({
     activeEngine: 'Google Gemini Vision (gemini-3.8-flash)',
@@ -208,11 +219,11 @@ export function App() {
       saveStoredLibrary(mergedList);
       setLibrary(mergedList);
 
-      // If user has lessons and none currently open, open their own latest lesson
-      if (mergedList.length > 0 && !currentKey) {
-        const firstKey = mergedList[0].key;
-        setSelectedKey(firstKey);
-        loadLesson(firstKey);
+      // 열린 수업이 없고 내 수업이 있을 때만, 내 수업 중 가장 최근 것을 연다 (예시 수업은 자동으로 열지 않는다)
+      const latestOwn = pickLatestOwn(mergedList);
+      if (latestOwn && !currentKey) {
+        setSelectedKey(latestOwn.key);
+        loadLesson(latestOwn.key);
       }
     } catch (err) {
       console.error('Failed to load library', err);
@@ -297,9 +308,10 @@ export function App() {
       setLibrary(updatedList);
 
       if (currentKey === key) {
-        if (updatedList.length > 0) {
-          setSelectedKey(updatedList[0].key);
-          loadLesson(updatedList[0].key);
+        const nextOwn = pickLatestOwn(updatedList);
+        if (nextOwn) {
+          setSelectedKey(nextOwn.key);
+          loadLesson(nextOwn.key);
         } else {
           setCurrentPage(null);
           setCurrentKey(null);
@@ -366,13 +378,16 @@ export function App() {
     setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
 
-  const canContinueFromLibrary = Boolean(bookmark || library.length > 0);
+  const canContinueFromLibrary = Boolean(bookmark || pickLatestOwn(library));
 
   const handleContinueFromLibrary = () => {
     if (bookmark) {
       handleResumeBookmark();
-    } else if (library.length > 0) {
-      loadLesson(library[0].key);
+      return;
+    }
+    const latestOwn = pickLatestOwn(library);
+    if (latestOwn) {
+      loadLesson(latestOwn.key);
     }
   };
 
