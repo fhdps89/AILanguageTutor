@@ -620,6 +620,7 @@ export function App() {
           <UploadSection
             ref={uploadRef}
             hidden={!showUploadCard}
+            showPhotoNotice={Boolean(currentPage)}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
