@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Upload, Image as ImageIcon, Loader2, Languages, Camera } from 'lucide-react';
+import { Upload, Image as ImageIcon, Loader2, Camera } from 'lucide-react';
 import { DailyQuota } from '../types';
 
 interface UploadSectionProps {
@@ -229,13 +229,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
       ) : (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-semibold text-slate-800">
-              교재 또는 원서 사진 등록
-            </label>
-            <span className="flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-              <Languages className="h-3 w-3" />
-              다국어 자동 언어 감지 & Vision OCR
-            </span>
+            <span className="block text-sm font-semibold text-slate-800">선택한 사진</span>
           </div>
 
           {/* Hidden inputs - explicit image/jpeg signals iOS to convert camera capture to JPEG */}
