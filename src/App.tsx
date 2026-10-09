@@ -35,6 +35,7 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [burstLimitMessage, setBurstLimitMessage] = useState<string | null>(null);
 
   // Local storage helpers
   const STORAGE_LIB_KEY = 'ai_tutor_saved_library_v2';
@@ -342,6 +343,16 @@ export function App() {
     setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
 
+  const canContinueFromLibrary = Boolean(bookmark || library.length > 0);
+
+  const handleContinueFromLibrary = () => {
+    if (bookmark) {
+      handleResumeBookmark();
+    } else if (library.length > 0) {
+      loadLesson(library[0].key);
+    }
+  };
+
   const handleRunDemo = async () => {
     setIsLoading(true);
     setLoadingMessage('데모 페이지를 로드하는 중입니다...');
@@ -385,6 +396,7 @@ export function App() {
     setErrorMessage(null);
     setErrorCode(null);
     setInfoMessage(null);
+    setBurstLimitMessage(null);
 
     try {
       const formData = new FormData();
@@ -401,6 +413,35 @@ export function App() {
         try {
           errData = await res.json();
         } catch {}
+
+        if (errData.code === 'ANALYZE_DEVICE_LIMIT') {
+          if (errData.quota) {
+            setQuota(errData.quota);
+          } else {
+            setQuota((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    analyze: {
+                      ...prev.analyze,
+                      remaining: 0,
+                    },
+                  }
+                : null
+            );
+          }
+          setErrorMessage(null);
+          setErrorCode(null);
+          return;
+        }
+
+        if (errData.code === 'ANALYZE_BURST_LIMIT') {
+          setBurstLimitMessage('잠깐 쉬어 갈게요. 15분 뒤에 다시 올려 주세요.');
+          setErrorMessage(null);
+          setErrorCode(null);
+          return;
+        }
+
         if (errData.quota) {
           setQuota(errData.quota);
         }
@@ -452,6 +493,9 @@ export function App() {
 
       fetchLibraryAndLoadLatest();
     } catch (err: any) {
+      if (err.code === 'ANALYZE_DEVICE_LIMIT' || err.code === 'ANALYZE_BURST_LIMIT') {
+        return;
+      }
       setErrorMessage(err.message || '사진 분석에 실패했습니다.');
       setErrorCode(err.code || null);
     } finally {
@@ -483,7 +527,10 @@ export function App() {
         <main className="flex-1 w-full space-y-6">
           <UploadSection
             selectedFile={selectedFile}
-            onFileSelect={setSelectedFile}
+            onFileSelect={(file) => {
+              setSelectedFile(file);
+              setBurstLimitMessage(null);
+            }}
             demoChecked={demoChecked}
             demoLang={demoLang}
             onRunDemo={handleRunDemo}
@@ -491,6 +538,8 @@ export function App() {
             isLoading={isLoading}
             loadingMessage={loadingMessage}
             quota={quota}
+            onContinueFromLibrary={canContinueFromLibrary ? handleContinueFromLibrary : undefined}
+            burstLimitMessage={burstLimitMessage}
           />
 
           {/* Feedback messages */}

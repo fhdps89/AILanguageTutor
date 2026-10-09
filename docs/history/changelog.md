@@ -6,6 +6,28 @@
 
 ---
 
+## [2026-10-09 KST] 일일 사진 분석 한도 소진 시 차분한 안내 카드(Calm Limit Card) 및 접근성 개선
+- **기능 배경 (Context):**
+  - 일일 사진 분석 한도(30장) 소진 시 위협적인 빨간색 오류 배너 대신, 소진 사유와 KST 자정 리셋 시각, 서재 학습을 유도하는 차분한 안내 카드를 제공하여 사용자 경험 극대화.
+  - 15분 단위 버스트 제한(`ANALYZE_BURST_LIMIT`) 시에도 경량 안내 텍스트로 친절하게 고지.
+- **적용된 수정 내역 (`src/App.tsx`, `src/components/UploadSection.tsx`):**
+  - `src/App.tsx`:
+    - `handleRunPhoto`에서 `ANALYZE_DEVICE_LIMIT` 수신 시 `quota.analyze.remaining`을 0으로 갱신하고 상단 빨간 에러 박스 미노출.
+    - `ANALYZE_BURST_LIMIT` 수신 시 `burstLimitMessage`("잠깐 쉬어 갈게요. 15분 뒤에 다시 올려 주세요.") 설정 및 상단 빨간 에러 박스 미노출.
+    - "서재에서 이어 하기" 핸들러 구성: 북마크 존재 시 `handleResumeBookmark`, 북마크 없고 서재 항목 존재 시 첫 항목 `loadLesson`, 둘 다 없을 시 버튼 숨김.
+  - `src/components/UploadSection.tsx`:
+    - `quota.analyze.remaining === 0`일 때 업로드 박스와 판독 생성 버튼 대신 회색 안내 카드(`bg-slate-50 border-slate-200`) 렌더링 (빨간색 배제).
+    - 제목 태그(h3): `"오늘 올릴 수 있는 사진 {limit}장을 다 썼어요"`
+    - 본문 문구: `"밤 12시(한국 시간)에 다시 {limit}장이 채워져요. 이미 만든 수업은 서재에서 계속 듣고 따라 읽을 수 있어요."`
+    - 버튼: `"서재에서 이어 하기"` (한도 카드 렌더링 시 자동 포커스 이동)
+    - 데모 모드(`demoChecked`) 체크 시 데모 실행 버튼은 한도 도달과 무관하게 항상 정상 노출 및 실행.
+- **접근성 및 안정성 보존 (Accessibility & Safety):**
+  - "서재에서 이어 하기" 버튼 자동 포커스 처리 (`continueBtnRef.current?.focus()`).
+  - 본문 및 버튼 글자 크기 14px(`text-sm`), WCAG AA 명도 대비(slate-800 버튼 12.6:1, slate-600 본문 6.8:1) 완벽 준수.
+  - `ANALYZE_DEVICE_MAX` 한도 수치(30장) 및 서버 코드 보존.
+
+---
+
 ## [2026-10-09 KST] 업로드 영역 하단 일일 잔여 쿼터 실시간 표시 UI 구현
 - **기능 배경 (Context):**
   - 사용자가 사진을 등록하기 전에 당일 남은 분석 가능 장수와 음성 생성 횟수를 직관적으로 인지할 수 있도록 업로드 영역 우측 하단에 경량 잔여 쿼터 표시선 제공.
