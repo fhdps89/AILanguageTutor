@@ -13,14 +13,17 @@ export const Header: React.FC<HeaderProps> = ({ build }) => {
           <Globe className="h-6 w-6" />
         </div>
         <div>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              AI 다국어 쉐도잉 튜터
-            </h1>
-            <span className="text-xs font-mono text-slate-500">build {build}</span>
-          </div>
-          <p className="text-sm text-slate-600 mt-0.5">
-            어떤 외국어든 책·교재 사진 한 장 → 언어 자동 판독 & 원어 음성 쉐도잉 학습 (중국어·프랑스어·영어·일본어·스페인어·독일어 등)
+          <span
+            className="block text-xs font-semibold tracking-wide text-indigo-700"
+            title={`build ${build}`}
+          >
+            AI 다국어 쉐도잉 튜터
+          </span>
+          <h1 className="mt-0.5 break-keep text-2xl font-bold tracking-tight text-slate-900">
+            책을 사진 찍으면 문장별로 읽어 주는 앱
+          </h1>
+          <p className="break-keep text-sm text-slate-600 mt-1">
+            중국어, 프랑스어, 영어, 일본어 등, 언어는 자동으로 알아봐요.
           </p>
         </div>
       </div>

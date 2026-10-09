@@ -276,7 +276,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                   <span className="font-semibold text-indigo-600">사진 파일 선택</span> 또는 드래그하여 업로드
                 </div>
                 <p className="text-[11px] text-slate-400 max-w-md">
-                  스마트폰으로 책 페이지를 찍어 올리시면 중국어, 프랑스어, 영어, 한국어 등 원어민 쉐도잉 교재로 즉시 변환됩니다 (장변 3,000px 정밀 분석 지원).
+                  스마트폰으로 책 페이지를 찍어 올리면 문장 카드와 AI 합성 음성으로 바꿔 줍니다 (장변 3,000px 정밀 분석 지원).
                 </p>
               </>
             )}
@@ -358,14 +358,22 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             </button>
           ) : (
             !isPhotoLimitReached && (
-              <button
-                onClick={onRunPhoto}
-                disabled={isLoading || !selectedFile}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
-              >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                사진 언어 판독 & 쉐도잉 생성
-              </button>
+              <div className="w-full sm:w-auto">
+                <button
+                  onClick={onRunPhoto}
+                  disabled={isLoading || !selectedFile}
+                  aria-describedby={!selectedFile && !isLoading ? 'generate-hint' : undefined}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  사진 언어 판독 & 쉐도잉 생성
+                </button>
+                {!selectedFile && !isLoading && (
+                  <p id="generate-hint" className="mt-1.5 text-sm text-slate-600">
+                    먼저 책 사진을 올려 주세요
+                  </p>
+                )}
+              </div>
             )
           )}
 
