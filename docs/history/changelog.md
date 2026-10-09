@@ -6,6 +6,19 @@
 
 ---
 
+## [2026-10-09 KST] 사용 기록 창구와 신고의 PostHog 전달 (지시문 B1, C4 연결)
+- **배경:** 몇 명이 오는지, 돌아오는지, 신고가 몇 건인지 볼 숫자가 없었다. 기록을 받는 창구만 만든다(어떤 행동을 기록할지는 B2·B3에서 추가).
+- **변경:**
+  - `server.ts`: `captureEvent(name, deviceId, props)`(PostHog `/i/v0/e/`로 POST, 기다리지 않음, 3초 타임아웃, 실패해도 예외 없음, `POSTHOG_KEY`가 없으면 아무것도 안 함, 새 패키지 없음). 기기별 `src`·`internal` 메모리(최대 5,000개, 가장 오래된 것부터 삭제, 처음 꼬리표 우선·`internal`은 덮어쓰기)를 이벤트에 자동으로 합친다. `POST /api/event`(본문 2KB 제한, 허용 이름 `app_open`·`sentence_play_start`·`sentence_complete` 외 400, 허용 속성만 통과, 기기 번호가 없으면 기록 없이 204, 항상 204, 기존 `/api/` 속도 제한 그대로). C4의 `recordReport`가 신고를 `error_report` 이벤트로도 보낸다.
+  - `src/utils/analytics.ts`(새 파일): `initAnalytics`(주소의 `?src=`는 처음 한 번만 저장, `?internal=1/0`, 처리 뒤 주소에서 두 값만 지움, `app_open`은 30분에 한 번), `track`(`keepalive`, 실패해도 화면 변화 없음, 저장소 접근은 모두 try/catch). `src/main.tsx`에서 앱 시작 때 한 번 호출.
+  - `src/components/LandingHero.tsx`: 시작 화면 맨 아래에 작은 글씨 한 줄 「서비스 개선을 위해 사용 기록(기기 번호, 재생 횟수)만 저장해요. 이름·이메일·사진은 기록하지 않아요.」 (지시문은 업로드 카드 하단이라고 했지만 그 카드는 시작 화면에서 숨겨져 있어 시작 화면에 둠.)
+  - `.env.example`에 `POSTHOG_KEY=`, `POSTHOG_HOST=`(값 없음). `docs/features/analytics.md` 새 문서, README·PROJECT_CONTEXT에 링크 한 줄.
+- **그대로:** 사진 분석, 음성 생성, 한도, 캐시, 서재, 학습 화면의 재생 코드(재생 기록은 B3).
+- **확인한 것:** 타입 검사 새 오류 없음. 가짜 PostHog 서버를 띄워 확인: 허용 목록 밖 이름 400, 기기 번호 없으면 204에 전달 없음, 처음 `src=blog` 유지(나중 `src=other` 무시), `internal` 덮어쓰기, 허용 밖 속성·값(`email`, `rate:2`, 잘못된 `lesson_key`)은 버려짐, 신고가 `error_report`로 전달됨. 브라우저에서 `?src=test1&internal=1` → 주소에서 두 값만 사라지고 `keep=1`은 남음, 이어서 `?src=test2`·새로고침에도 `app_open` 1건·`src`는 `test1`, `?internal=0`으로 해제. `POSTHOG_KEY` 없는 실행에서 앱·신고 정상.
+- **확인하지 못한 것:** 실제 PostHog 화면에 이벤트가 보이는지(키가 없음), 이벤트에 IP·위치가 없는지(`$geoip_disable` 속성이 공식 문서에서 확인되지 않아 PostHog 프로젝트 설정의 IP 저장 끄기를 권장), 전송 주소 `/i/v0/e/`는 공식 문서 기준(지시문 초안의 `/capture/`에서 바꿈).
+
+---
+
 ## [2026-10-09 KST] 카드마다 「이 설명이 틀렸어요」 신고 버튼 (지시문 C4)
 - **배경:** 번역·발음 설명·단어 뜻이 틀려도 학습자가 알릴 길이 없어 오류가 얼마나 나는지 알 수 없었다. 신고를 모으기 시작한다.
 - **변경:**

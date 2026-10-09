@@ -62,6 +62,9 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           </button>
         </div>
       )}
+      <p className="text-center text-xs leading-relaxed text-slate-600">
+        서비스 개선을 위해 사용 기록(기기 번호, 재생 횟수)만 저장해요. 이름·이메일·사진은 기록하지 않아요.
+      </p>
     </section>
   );
 };
