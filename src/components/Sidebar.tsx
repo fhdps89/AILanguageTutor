@@ -97,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Library History */}
-      <div id="library-section" tabIndex={-1} className="outline-none">
+      <div id="library-section" tabIndex={-1} className="outline-none hidden md:block">
         <LibraryList
           variant="sidebar"
           library={library}

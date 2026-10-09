@@ -6,6 +6,7 @@ interface LandingHeroProps {
   quota?: DailyQuota | null;
   hasOwnLesson: boolean;
   onUploadClick: () => void;
+  onCameraClick: () => void;
   onOpenLibrary: () => void;
   children?: React.ReactNode;
 }
@@ -15,6 +16,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
   quota,
   hasOwnLesson,
   onUploadClick,
+  onCameraClick,
   onOpenLibrary,
   children,
 }) => {
@@ -33,6 +35,20 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
         <Camera className="h-5 w-5" />
         내 책 올려 보기
       </button>
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={onCameraClick}
+          className="min-h-11 px-3 text-sm font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
+        >
+          카메라로 바로 촬영하기
+        </button>
+      </div>
+      {quota && (
+        <p className="text-center text-sm text-slate-600">
+          오늘 사진 {quota.analyze.remaining}장 남음
+        </p>
+      )}
       {hasOwnLesson && (
         <div className="text-center">
           <button

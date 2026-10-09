@@ -14,6 +14,8 @@ interface UploadSectionProps {
   quota?: DailyQuota | null;
   onContinueFromLibrary?: () => void;
   burstLimitMessage?: string | null;
+  // 시작 화면에서 사진을 고르기 전에는 칸을 감춘다(사진 고르기 창은 그대로 열 수 있다)
+  hidden?: boolean;
 }
 
 /**
@@ -132,6 +134,7 @@ function fallbackImageLoad(file: File, maxDim: number, resolve: (f: File) => voi
 
 export interface UploadSectionHandle {
   openFilePicker: () => void;
+  openCamera: () => void;
 }
 
 export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>(({
@@ -146,6 +149,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
   quota,
   onContinueFromLibrary,
   burstLimitMessage,
+  hidden = false,
 }, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -156,6 +160,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
   // 바깥(시작 화면)에서 사진 고르기 창을 열 수 있게 한다
   useImperativeHandle(ref, () => ({
     openFilePicker: () => fileInputRef.current?.click(),
+    openCamera: () => cameraInputRef.current?.click(),
   }));
 
   const isPhotoLimitReached = Boolean(quota && quota.analyze.remaining === 0);
@@ -169,9 +174,14 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
   const handleProcessFile = async (rawFile: File) => {
     const optimized = await optimizeImageForOcr(rawFile, 2500);
     onFileSelect(optimized);
-    // 미리보기와 생성 버튼이 바로 보이도록 업로드 카드로 내려간다
-    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // 사진을 고르면 미리보기와 생성 버튼이 바로 보이도록 업로드 카드로 내려간다
+  useEffect(() => {
+    if (selectedFile) {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -200,7 +210,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
   };
 
   return (
-    <div ref={cardRef} className="rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200 mb-6 space-y-4">
+    <div ref={cardRef} className={`rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200 mb-6 space-y-4 ${hidden ? 'hidden' : ''}`}>
       {isPhotoLimitReached ? (
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-5 sm:p-6 space-y-3">
           <h3 className="text-base sm:text-lg font-bold text-slate-800">
