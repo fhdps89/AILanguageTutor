@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, Loader2, Languages, Camera } from 'lucide-react';
 import { DailyQuota } from '../types';
 
@@ -130,7 +130,11 @@ function fallbackImageLoad(file: File, maxDim: number, resolve: (f: File) => voi
   img.src = url;
 }
 
-export const UploadSection: React.FC<UploadSectionProps> = ({
+export interface UploadSectionHandle {
+  openFilePicker: () => void;
+}
+
+export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>(({
   selectedFile,
   onFileSelect,
   demoChecked,
@@ -142,11 +146,17 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   quota,
   onContinueFromLibrary,
   burstLimitMessage,
-}) => {
+}, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const continueBtnRef = useRef<HTMLButtonElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // 바깥(시작 화면)에서 사진 고르기 창을 열 수 있게 한다
+  useImperativeHandle(ref, () => ({
+    openFilePicker: () => fileInputRef.current?.click(),
+  }));
 
   const isPhotoLimitReached = Boolean(quota && quota.analyze.remaining === 0);
 
@@ -159,6 +169,8 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const handleProcessFile = async (rawFile: File) => {
     const optimized = await optimizeImageForOcr(rawFile, 2500);
     onFileSelect(optimized);
+    // 미리보기와 생성 버튼이 바로 보이도록 업로드 카드로 내려간다
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,7 +200,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   };
 
   return (
-    <div className="rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200 mb-6 space-y-4">
+    <div ref={cardRef} className="rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200 mb-6 space-y-4">
       {isPhotoLimitReached ? (
         <div className="rounded-xl bg-slate-50 border border-slate-200 p-5 sm:p-6 space-y-3">
           <h3 className="text-base sm:text-lg font-bold text-slate-800">
@@ -387,4 +399,5 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       )}
     </div>
   );
-};
+});
+UploadSection.displayName = 'UploadSection';
