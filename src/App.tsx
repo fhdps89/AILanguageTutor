@@ -44,9 +44,9 @@ export function App() {
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [showPhoto, setShowPhoto] = useState(false);
-  // 펼쳐진 문장 카드 id (수업을 열면 하나도 펼치지 않음) / 고른 듣기 속도 (R8에서 바뀐다)
+  // 펼쳐진 문장 카드 id (수업을 열면 하나도 펼치지 않음) / 고른 듣기 속도 (다음 문장에도 이어진다)
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [preferredRate] = useState<1.0 | 0.75 | 0.5>(1.0);
+  const [preferredRate, setPreferredRate] = useState<1.0 | 0.75 | 0.5>(1.0);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -786,6 +786,7 @@ export function App() {
                       isExpanded={expandedId === sentence.id}
                       onSelect={setExpandedId}
                       preferredRate={preferredRate}
+                      onRateChange={setPreferredRate}
                     />
                   );
                 })}
