@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Upload, Image as ImageIcon, Loader2, Camera } from 'lucide-react';
 import { DailyQuota } from '../types';
+import { PhotoNotice } from './PhotoNotice';
 
 interface UploadSectionProps {
   selectedFile: File | null;
@@ -13,6 +14,8 @@ interface UploadSectionProps {
   burstLimitMessage?: string | null;
   // 시작 화면에서 사진을 고르기 전에는 칸을 감춘다(사진 고르기 창은 그대로 열 수 있다)
   hidden?: boolean;
+  // 수업이 열린 화면에서는 시작 화면의 안내가 없으므로 이 칸이 대신 보여 준다
+  showPhotoNotice?: boolean;
 }
 
 /**
@@ -144,6 +147,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
   onContinueFromLibrary,
   burstLimitMessage,
   hidden = false,
+  showPhotoNotice = false,
 }, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -380,6 +384,7 @@ export const UploadSection = forwardRef<UploadSectionHandle, UploadSectionProps>
           )}
         </div>
       )}
+      {showPhotoNotice && !isPhotoLimitReached && <PhotoNotice />}
     </div>
   );
 });
