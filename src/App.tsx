@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
-import { UploadSection } from './components/UploadSection';
+import { UploadSection, UploadSectionHandle } from './components/UploadSection';
+import { LandingHero } from './components/LandingHero';
 import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
 import { LibrarySheet } from './components/LibrarySheet';
@@ -36,6 +37,7 @@ export function App() {
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const uploadRef = useRef<UploadSectionHandle>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentPage, setCurrentPage] = useState<LessonPage | null>(null);
@@ -566,7 +568,8 @@ export function App() {
       <Header build={status.build} onOpenLibrary={handleOpenLibrary} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* Sidebar */}
+        {/* Sidebar: 휴대폰에서는 사진 고르기 칸 아래로 */}
+        <div className="w-full md:w-80 shrink-0 order-last md:order-first">
         <Sidebar
           status={status}
           demoChecked={demoChecked}
@@ -580,6 +583,7 @@ export function App() {
           onDeleteLesson={handleDeleteLesson}
           isLoading={isLoading}
         />
+        </div>
 
         <LibrarySheet
           open={isLibraryOpen}
@@ -599,7 +603,16 @@ export function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 w-full space-y-6">
+          {!currentPage && !isLoading && (
+            <LandingHero
+              quota={quota}
+              hasOwnLesson={library.some(isOwnLesson)}
+              onUploadClick={() => uploadRef.current?.openFilePicker()}
+              onOpenLibrary={handleOpenLibrary}
+            />
+          )}
           <UploadSection
+            ref={uploadRef}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
@@ -779,17 +792,7 @@ export function App() {
                 />
               </div>
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500 space-y-2">
-              <Info className="mx-auto h-8 w-8 text-slate-400" />
-              <p className="text-sm font-medium text-slate-700">
-                데모를 켜고 데모 페이지 만들기, 또는 사진 분석을 누르세요.
-              </p>
-              <p className="text-xs text-slate-500">
-                사이드바의 [데모: 개선문 페이지] 체크박스를 선택하면 즉시 무료로 쉐도잉 트랙을 체험할 수 있습니다.
-              </p>
-            </div>
-          )}
+          ) : null}
         </main>
       </div>
     </div>
