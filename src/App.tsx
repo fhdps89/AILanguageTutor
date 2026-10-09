@@ -10,7 +10,7 @@ import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon, Camera, Loader2 } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
 
-// 예시 수업(demo-arc, demo-chinese)은 내 수업이 아니다. Sidebar의 isDemo 판단과 같은 기준.
+// 예시 수업(demo-arc, demo-chinese)은 내 수업이 아니다. 서재 목록에는 내 수업만 둔다.
 const isOwnLesson = (item: LibraryItem) => item.key !== 'demo-arc' && item.key !== 'demo-chinese';
 
 // 내 수업 중 가장 최근에 저장한 것. 내 수업이 없으면 null.
@@ -227,7 +227,8 @@ export function App() {
       localList.forEach(item => mergedMap.set(item.key, item));
       serverList.forEach(item => mergedMap.set(item.key, item));
 
-      const mergedList = Array.from(mergedMap.values());
+      // 서재에는 내 수업만 둔다 (예전에 기기에 저장된 예시 수업 기록도 걸러낸다)
+      const mergedList = Array.from(mergedMap.values()).filter(isOwnLesson);
       saveStoredLibrary(mergedList);
       setLibrary(mergedList);
 
@@ -442,7 +443,6 @@ export function App() {
       const lessonKey = data.key || (demoLang === 'zh' ? 'demo-chinese' : 'demo-arc');
       setCurrentPage(data.page);
       setCurrentKey(lessonKey);
-      setSelectedKey(lessonKey);
       setPhotoUrl(null);
 
       saveStoredPage(lessonKey, {

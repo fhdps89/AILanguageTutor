@@ -876,33 +876,13 @@ app.get('/api/library', async (req: Request, res: Response) => {
   const callerOwnerId = getOwnerId(req);
   const fullLib = await loadLibraryAsync();
 
-  // Return public demos (demo-arc, demo-chinese) + lessons owned by this specific device/user
+  // 서재는 이 기기(사용자)가 만든 수업만 돌려준다. 예시 수업(demo-arc, demo-chinese)은 서재에 넣지 않고
+  // 데모 체험 모드(/api/demo)와 /api/lesson/:key로만 연다.
   const userLib = fullLib.filter((item) => {
-    if (item.key === 'demo-arc' || item.key === 'demo-chinese') return true;
+    if (item.key === 'demo-arc' || item.key === 'demo-chinese') return false;
     if (!item.ownerId) return false; // Legacy unassigned items hidden for privacy
     return item.ownerId === callerOwnerId;
   });
-
-  // Ensure demo-chinese is in library list
-  const hasChineseDemo = userLib.some((i) => i.key === 'demo-chinese');
-  if (!hasChineseDemo && fs.existsSync(DEMO_CHINESE_JSON_PATH)) {
-    try {
-      const cRaw = fs.readFileSync(DEMO_CHINESE_JSON_PATH, 'utf-8');
-      const cData = JSON.parse(cRaw);
-      userLib.unshift({
-        key: 'demo-chinese',
-        title: '北京故宫：六百年的紫禁城',
-        book_title: '北京故宫 (자금성)',
-        page_no: 1,
-        created_at: '2026-10-04T00:00:00.000Z',
-        source: 'demo',
-        n_sentences: cData.sentences?.length || 6,
-        saved_at: '2026-10-04T00:00:00.000Z',
-        language: cData.language,
-        ownerId: 'system',
-      });
-    } catch {}
-  }
 
   res.json(userLib);
 });

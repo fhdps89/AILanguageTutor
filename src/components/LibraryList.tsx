@@ -43,7 +43,6 @@ export const LibraryList: React.FC<LibraryListProps> = ({
         <div className={isSheet ? 'space-y-2' : 'space-y-2 max-h-80 overflow-y-auto pr-1'}>
           {library.map((item) => {
             const isSelected = selectedKey === item.key;
-            const isDemo = item.key === 'demo-arc' || item.key === 'demo-chinese';
             const langFlag = item.language?.flag || '🌐';
             const langName = item.language?.name_ko || '';
 
@@ -68,11 +67,6 @@ export const LibraryList: React.FC<LibraryListProps> = ({
                   <span className="truncate font-semibold flex items-center gap-1">
                     <span>{langFlag}</span>
                     <span className="truncate">{item.book_title || item.title}</span>
-                    {isDemo && (
-                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
-                        예시
-                      </span>
-                    )}
                   </span>
                   <span className={`mt-0.5 ${isSheet ? 'text-sm text-slate-600' : 'text-xs text-slate-600'}`}>
                     {langName ? `${langName} · ` : ''}{item.n_sentences}개 문장 · {item.saved_at.slice(0, 10)}
@@ -80,22 +74,20 @@ export const LibraryList: React.FC<LibraryListProps> = ({
                 </button>
 
                 <div className="flex items-center gap-1">
-                  {!isDemo && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteLesson(item.key, item.book_title || item.title);
-                      }}
-                      className={`rounded text-slate-500 transition hover:bg-rose-100 hover:text-rose-600 ${
-                        isSheet ? 'p-2.5 opacity-100' : 'p-1 opacity-60 group-hover:opacity-100'
-                      }`}
-                      title="서재에서 이 교재 삭제"
-                      aria-label="서재에서 이 교재 삭제"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteLesson(item.key, item.book_title || item.title);
+                    }}
+                    className={`rounded text-slate-500 transition hover:bg-rose-100 hover:text-rose-600 ${
+                      isSheet ? 'p-2.5 opacity-100' : 'p-1 opacity-60 group-hover:opacity-100'
+                    }`}
+                    title="서재에서 이 교재 삭제"
+                    aria-label="서재에서 이 교재 삭제"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             );
