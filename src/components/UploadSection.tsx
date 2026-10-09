@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, Loader2, Languages, Camera } from 'lucide-react';
+import { DailyQuota } from '../types';
 
 interface UploadSectionProps {
   selectedFile: File | null;
@@ -10,6 +11,7 @@ interface UploadSectionProps {
   onRunPhoto: () => void;
   isLoading: boolean;
   loadingMessage: string;
+  quota?: DailyQuota | null;
 }
 
 /**
@@ -135,6 +137,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   onRunPhoto,
   isLoading,
   loadingMessage,
+  quota,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -255,6 +258,29 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
               <Camera className="h-4 w-4 text-indigo-600" />
               <span>카메라로 바로 촬영하기</span>
             </button>
+          </div>
+        )}
+
+        {/* Quota indicator line: right below upload area, right-aligned */}
+        {quota && (
+          <div
+            aria-live="polite"
+            className="mt-2 flex items-center justify-end text-sm text-slate-600 flex-wrap gap-x-1"
+          >
+            <span>오늘</span>
+            <span className={quota.analyze.remaining <= 5 ? 'text-amber-700 font-medium' : ''}>
+              사진 {quota.analyze.remaining}장 남음
+              {quota.analyze.remaining <= 5 && (
+                <span className="text-xs ml-1 font-normal">(자정에 다시 {quota.analyze.limit}장)</span>
+              )}
+            </span>
+            <span className="text-slate-400 mx-0.5">·</span>
+            <span className={quota.tts.remaining <= 10 ? 'text-amber-700 font-medium' : ''}>
+              음성 {quota.tts.remaining}회 남음
+              {quota.tts.remaining <= 10 && (
+                <span className="text-xs ml-1 font-normal">(처음 듣는 문장만 줄어요)</span>
+              )}
+            </span>
           </div>
         )}
       </div>

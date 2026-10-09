@@ -43,7 +43,7 @@
                                     [Gemini Native TTS Engine]
                                     • gemini-3.8-flash-lite-tts (Kore)
                                     • 0.75x / 0.5x 네이티브 스타일 발화
-                                    • SHA-256 캐시 & 쿼터 방어 (사진 30장/음성 100회, quota 응답 탑재)
+                                    • SHA-256 캐시 & 쿼터 방어 (사진 30장/음성 100회, 잔여량 실시간 표시)
 ```
 
 ---

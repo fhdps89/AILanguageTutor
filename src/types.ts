@@ -77,3 +77,18 @@ export interface StudyBookmark {
   sentenceText: string;
   updatedAt: string;
 }
+
+export interface DailyQuota {
+  analyze: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  tts: {
+    used: number;
+    limit: number;
+    remaining: number;
+    blockedBy: 'global' | 'device' | null;
+  };
+  resetAt: string;
+}

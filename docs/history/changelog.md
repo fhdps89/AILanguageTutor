@@ -6,6 +6,27 @@
 
 ---
 
+## [2026-10-09 KST] 업로드 영역 하단 일일 잔여 쿼터 실시간 표시 UI 구현
+- **기능 배경 (Context):**
+  - 사용자가 사진을 등록하기 전에 당일 남은 분석 가능 장수와 음성 생성 횟수를 직관적으로 인지할 수 있도록 업로드 영역 우측 하단에 경량 잔여 쿼터 표시선 제공.
+- **적용된 수정 내역 (`src/App.tsx`, `src/components/UploadSection.tsx`, `src/types.ts`):**
+  - `src/types.ts`: `DailyQuota` 인터페이스 추가.
+  - `src/App.tsx`:
+    - `quota` 상태 관리 및 초기 마운트 시 `/api/quota` 비동기 조회 (실패 시 조용히 `null` 처리).
+    - 사진 분석 성공 시 응답 내 `quota` 즉시 반영 및 백그라운드 음성 생성 반영을 위해 5초 뒤 추가 갱신.
+    - 브라우저 탭 복귀(`visibilitychange`) 및 KST 자정 `resetAt` 시각 도달 시 자동 재동기화.
+  - `src/components/UploadSection.tsx`:
+    - 업로드 박스 바로 아래 우측에 `"오늘 사진 N장 남음 · 음성 M회 남음"` 단일 라인 렌더링.
+    - 서버 제공 `limit`와 `remaining` 값에 기반하여 동적 출력 (클라이언트 상수 하드코딩 제거).
+    - 사진 5장 이하 잔여 시 `text-amber-700` 강조 및 `(자정에 다시 {limit}장)` 부가 안내.
+    - 음성 10회 이하 잔여 시 `text-amber-700` 강조 및 `(처음 듣는 문장만 줄어요)` 부가 안내.
+    - `quota`가 `null`인 경우 라인 미노출.
+- **접근성 및 안정성 보존 (Accessibility & Safety):**
+  - `aria-live="polite"` 속성 부여 및 14px(`text-sm`), WCAG AA 대비(slate-600: 7:1, amber-700: 4.6:1) 준수.
+  - 기존 오류 안내 배너, 차단 정책, 음성 재생 및 서버 코드 무변경 유지.
+
+---
+
 ## [2026-10-09 KST] 분석 및 음성 응답 내 실시간 잔여 쿼터(`quota`) 필드 통합
 - **기능 배경 (Context):**
   - 클라이언트 화면이 추가 API 호출 없이도 사진 분석 및 음성 합성 성공/한도초과 시 최신 쿼터 상태를 즉시 수신할 수 있도록 기존 주요 API 응답에 `quota` 필드 탑재.

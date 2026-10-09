@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { UploadSection } from './components/UploadSection';
 import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
-import { LessonPage, LibraryItem, SystemStatus, StudyBookmark } from './types';
+import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from './types';
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
 
@@ -16,6 +16,8 @@ export function App() {
     build: '20261005',
     hasGemini: true,
   });
+
+  const [quota, setQuota] = useState<DailyQuota | null>(null);
 
   const [demoChecked, setDemoChecked] = useState(false);
   const [demoLang, setDemoLang] = useState<'zh' | 'fr'>('zh');
@@ -78,8 +80,23 @@ export function App() {
     } catch {}
   };
 
+  const fetchQuota = async () => {
+    try {
+      const res = await fetch('/api/quota', {
+        headers: { 'x-device-id': getDeviceId() },
+      });
+      if (res.ok) {
+        const data: DailyQuota = await res.json();
+        setQuota(data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch quota', err);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
+    fetchQuota();
     fetchLibraryAndLoadLatest();
 
     const handleRateLimit = (e: any) => {
@@ -87,6 +104,7 @@ export function App() {
       setErrorMessage(msg);
       setErrorCode(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      fetchQuota();
     };
 
     window.addEventListener('ai-tutor-rate-limit', handleRateLimit);
@@ -94,6 +112,39 @@ export function App() {
       window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
     };
   }, []);
+
+  // Refresh quota when tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchQuota();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Automatically refresh quota when resetAt time passes
+  useEffect(() => {
+    if (!quota?.resetAt) return;
+    const resetMs = new Date(quota.resetAt).getTime();
+    const nowMs = Date.now();
+    const diffMs = resetMs - nowMs;
+
+    if (diffMs <= 0) {
+      fetchQuota();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetchQuota();
+    }, diffMs + 500);
+
+    return () => clearTimeout(timer);
+  }, [quota?.resetAt]);
 
   const fetchStatus = async () => {
     try {
@@ -350,12 +401,21 @@ export function App() {
         try {
           errData = await res.json();
         } catch {}
+        if (errData.quota) {
+          setQuota(errData.quota);
+        }
         const errorObj: any = new Error(errData.error || '사진 분석에 실패했습니다.');
         errorObj.code = errData.code;
         throw errorObj;
       }
 
       const data = await res.json();
+      if (data.quota) {
+        setQuota(data.quota);
+        setTimeout(() => {
+          fetchQuota();
+        }, 5000);
+      }
       setCurrentPage(data.page);
       setCurrentKey(data.key);
       setSelectedKey(data.key);
@@ -430,6 +490,7 @@ export function App() {
             onRunPhoto={handleRunPhoto}
             isLoading={isLoading}
             loadingMessage={loadingMessage}
+            quota={quota}
           />
 
           {/* Feedback messages */}
