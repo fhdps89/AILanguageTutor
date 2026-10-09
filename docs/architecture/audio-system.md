@@ -62,9 +62,9 @@
 ## 5. 일일 호출 한도 및 쿼터 관리 시스템 (Daily Quota Architecture)
 
 ### 5.1 일일 한도 설정 (상수 분리)
-Google Gemini 일일 할당량(약 100회) 고갈로 인한 전체 사용자 서비스 마비를 방지하기 위해 서버 상단에 안전 상한을 정의합니다.
-- **서버 전체 일일 음성 생성:** 80회 (`TTS_GLOBAL_MAX`)
-- **기기당 일일 음성 생성:** 40회 (`TTS_DEVICE_MAX`)
+Gemini Tier 2 기준 음성 모델(Gemini 3.8 Flash Lite TTS)의 일일 요청 한도(10,000회) 안에서 안정적인 쿼터 관리를 위해 서버 상단에 안전 상한을 정의합니다.
+- **서버 전체 일일 음성 생성:** 500회 (`TTS_GLOBAL_MAX`)
+- **기기당 일일 음성 생성:** 100회 (`TTS_DEVICE_MAX`)
 - **식별자 미제공 기기 (`anonymous`):** 10회 (`TTS_ANONYMOUS_MAX`)
 - **일일 리셋 기준 시각:** KST 자정(00:00) 기준 (`DAILY_RESET_TZ_OFFSET_HOURS = 9`)
 
