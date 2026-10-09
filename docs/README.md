@@ -1,6 +1,6 @@
 # 📚 AI 다국어 쉐도잉 튜터 — 심층 문서 아카이브 허브 (Docs Hub)
 
-> **공식 기준 빌드:** `build 20261008-multilingual`  
+> **공식 기준 빌드:** `build 20261009-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)
 
 본 디렉토리(`docs/`)는 **AI 다국어 쉐도잉 튜터** 프로젝트의 모든 아키텍처 상세 설계, 기능 명세서, 버전별 변경 이력, 장애 분석 및 트러블슈팅 사례를 보존하는 통합 아카이브 공간입니다.
@@ -32,16 +32,26 @@
   - 기준 빌드 코드 리뷰, 뒷면 비침/각주 방어 및 파일럿 테스트 기준
 - **[다국어 쉐도잉 학습 시나리오 (multilingual-shadowing.md)](./features/multilingual-shadowing.md)**  
   - 외국어 끊어 읽기(Chunking), ASCII 구문 분석도, 어휘 강조, 전체 지문 릴레이 낭독 플로우
+- **[현재 화면과 동작 (screens.md)](./features/screens.md)**  
+  - 시작 화면, 서재, 문장 카드(한 줄 접기/펼치기, 속도 칸, 끊어 읽기, 신고)의 현재 모습과 2026-10-09 결정
+- **[사용 기록 (analytics.md)](./features/analytics.md)**  
+  - PostHog로 보내는 이벤트·속성, 신고 한도, 아직 보내지 않는 기록(B2·B3)
+- **[PostHog 가입·사용·운영 가이드 (posthog-guide.md)](./features/posthog-guide.md)**  
+  - 가입 순서, 화면 사용법, 매주 월요일 숫자 5개, 꼬리표(`?src=`, `?internal=`), 신고 보기, 점검표
 - **[Google SSO & 클라우드 영구 동기화 로드맵 (roadmap-sso.md)](./features/roadmap-sso.md)**  
   - 차기 최우선 과제: Google 계정 연동, 익명 서재 자동 병합, 영구 단어장(★), A/B Shadowing Evaluator
 
 ### 3. [변경 이력 (History & Changelog)](./history/)
 - **[KST 기준 버전별 전체 변경 이력 (changelog.md)](./history/changelog.md)**  
-  - 프로젝트 생성부터 현재 버전(`build 20260930-gemini-single`)까지의 무삭제 변경 이력
+  - 프로젝트 생성부터 현재 버전(`build 20261009-multilingual`)까지의 무삭제 변경 이력
   - KST 기준 일자 정렬 및 UX 개선/보안 조치 이력 상세 수록
   - 차기 스프린트(Google SSO 연동, SRS 단어장, Shadowing Evaluator) 로드맵
 
-### 4. [트러블슈팅 및 장애 분석 (Troubleshooting)](./troubleshooting/)
+### 4. [정책 (Policy)](./policy/)
+- **[사진·저작권 안내의 근거 (copyright-and-data.md)](./policy/copyright-and-data.md)**  
+  - 시작 화면 안내 문장별 근거 코드와 본문과 어긋나 보이는 점(서재 50개 제한, 같은 사진의 폴더 공유)
+
+### 5. [트러블슈팅 및 장애 분석 (Troubleshooting)](./troubleshooting/)
 - **[장애 분석 및 방어 사례집 (incident-analysis.md)](./troubleshooting/incident-analysis.md)**  
   - Cloud Run 32KB 배포 환경변수/패키지 초과 원인 및 계층화 해결책
   - 브라우저 WSOLA 알고리즘의 0.75x/0.5x 지지직 노이즈 발생 원인 및 LLM 네이티브 발화 해결

@@ -3,7 +3,7 @@
 > **공식 빌드 버전:** `build 20261009-multilingual`  
 > **최신 업데이트 일자:** 2026-10-09 (KST)  
 > **공식 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)  
-> **아키텍처 표준:** 계층화 문서화 및 배포 격리 아키텍처 (루트 문서 5KB 미만 유지, 모든 기록 일자 KST 기준)
+> **문서 원칙:** 루트 문서 5KB 미만, 기록 일자는 KST
 
 ---
 
@@ -20,7 +20,7 @@
 
 - **정의:** 따뜻하고 지적이며 학습자의 눈높이에 맞추는 어학 코치. 음성은 AI 합성 음성이다.
 - **속도:** 초급자는 또박또박 `0.5x`, 중급자는 숨 고르기와 연음을 살린 `0.75x`·`1.0x`.
-- **교수법:** 소리 ➔ 청크(의미 덩어리) ➔ 뉘앙스. 불필요한 선택 강요 없이 즉시 카드와 소리로 응답.
+- **교수법:** 소리 ➔ 청크(의미 덩어리) ➔ 뉘앙스.
 
 ---
 
@@ -47,20 +47,18 @@
 
 ## 🚀 4. 차기 최우선 확정 과제 (Next Sprint Roadmap)
 
-1. **Google SSO 계정 연동 및 클라우드 영구 동기화 (최우선 확정 과제):**
-   - 기존 `x-device-id` 익명 서재 데이터를 구글 로그인 시 `google_user_id` 계정으로 자동 병합(Merge).
-   - **계정별 영구 단어장 (★):** 단어 저장, 문맥 문장 보존, SRS 간격 반복 복습.
-   - **학습 위치 동기화:** '내일은 여기서부터 시작' 북마크의 멀티 디바이스 실시간 연동.
-2. **학습자 음성 녹음 & 원어민 A/B 청취 비교 (Shadowing Evaluator):**
-   - Web Audio API 마이크 녹음 및 원어민 음성과 1:1 교차 청취 모드.
-3. **교재 딥링크 공유:** 특정 교재 및 문장 위치 URL 공유.
+1. **Google SSO 계정 연동 및 클라우드 영구 동기화 (최우선):** 익명 `x-device-id` 서재를 구글 계정으로 병합하고, 계정별 단어장(★, SRS 복습)과 학습 위치 동기화를 둔다.
+2. **학습자 음성 녹음 & A/B 청취 비교:** 마이크 녹음과 원어민 음성 교차 청취.
+3. **교재 딥링크 공유:** 특정 교재·문장 위치 URL 공유.
 *(상세 기획서: `docs/features/roadmap-sso.md` 참조)*
 
 ---
 
 ## 🧭 최근 결정 (2026-10-09)
 
-- 지원 언어 중국어 포함, 분석 실패 전용 안내(`RECITATION`, `UNSUPPORTED_LANGUAGE`). 상세는 changelog 최신 항목.
+- 지원 언어 중국어 포함, 분석 실패 전용 안내(`RECITATION`, `UNSUPPORTED_LANGUAGE`).
+- 화면 개편(시작 화면·영상·내 수업만 서재·한 줄 카드), 신고 버튼, 저작권 안내, PostHog 사용 기록 창구 완료. 상세는 changelog.
+- 남은 일: 문장 재생·완료 기록(B3, "완료" 정의 결정 필요), Gemini 원가 기록(B2, 단가 필요), 문서 과장 정리(C6).
 
 ---
 
@@ -69,10 +67,12 @@
 상세 설계, 변경 이력(KST), 트러블슈팅은 배포 격리된 `docs/` 디렉토리에 영구 보존됩니다.
 
 - 🗂️ **[문서 종합 색인 (docs/README.md)](./docs/README.md)**
-- 🚀 **[Google SSO & 클라우드 동기화 상세 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
-- 🔊 **[음성 및 오디오 엔진 설계서 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
-- 🧠 **[튜터 프롬프트 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
-- 📜 **[KST 기준 버전별 무삭제 변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**
-- 🇰🇷 **[한국어 원서 모드 상세 기획 (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
-- 📊 **[사용 기록 (docs/features/analytics.md)](./docs/features/analytics.md)**
-- 🛠️ **[장애 분석 및 트러블슈팅 (docs/troubleshooting/incident-analysis.md)](./docs/troubleshooting/incident-analysis.md)**
+- 🚀 **[Google SSO 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
+- 🔊 **[오디오 엔진 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
+- 🧠 **[튜터 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
+- 📜 **[변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**
+- 🇰🇷 **[한국어 원서 모드 (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
+- 🖥️ **[현재 화면과 동작 (docs/features/screens.md)](./docs/features/screens.md)**
+- 📊 **[사용 기록 (docs/features/analytics.md)](./docs/features/analytics.md)** · **[PostHog 가이드](./docs/features/posthog-guide.md)**
+- ⚖️ **[사진·저작권 안내 근거 (docs/policy/copyright-and-data.md)](./docs/policy/copyright-and-data.md)**
+- 🛠️ **[트러블슈팅 (docs/troubleshooting/incident-analysis.md)](./docs/troubleshooting/incident-analysis.md)**

@@ -14,7 +14,13 @@
 
 ## 서버가 직접 보내는 이벤트
 
-- `error_report`: 카드의 「이 설명이 틀렸어요」 신고(교재 키, 문장 번호, 항목, 언어). 신고는 `cache/reports.jsonl`에도 남음.
+- `error_report`: 카드의 「이 설명이 틀렸어요」 신고. 속성은 `reason`(raw_text·translation·pronunciation·vocabulary·other), `lesson_key`, `sentence_id`, `lang`. 신고는 `cache/reports.jsonl`에도 남음(2MB를 넘으면 더 쓰지 않음).
+- 신고 한도: 기기당 하루 30건, 기기 번호 없는 요청 5건, 서버 전체 500건(KST 자정 초기화, 메모리). 넘으면 429 `REPORT_LIMIT`.
+
+## 아직 보내지 않는 것 (예정)
+
+- `sentence_play_start`·`sentence_complete`(B3): 서버는 받을 준비가 되어 있지만 화면은 아직 보내지 않는다. "문장 완료"를 속도와 무관한 자연 종료로 셀지(추천) 0.75x만 셀지 결정이 필요하다.
+- `photo_analyzed`·`photo_analyze_failed`·`limit_blocked`·`gemini_call`(B2): Gemini 단가 4개가 필요하다. 코드에는 아직 없다.
 
 ## 수집하지 않는 것
 
@@ -22,4 +28,4 @@
 
 ## 환경 변수
 
-`POSTHOG_KEY`, `POSTHOG_HOST`(없으면 `https://us.i.posthog.com`). 값은 코드와 저장소에 넣지 않고 AI Studio 비밀값에만 둡니다. 가입 순서는 `/mnt/project-files/ai-studio/계측/PostHog-가입-가이드.md` 참고.
+`POSTHOG_KEY`, `POSTHOG_HOST`(없으면 `https://us.i.posthog.com`). 값은 코드와 저장소에 넣지 않고 AI Studio 비밀값에만 둡니다. 가입·화면 사용법·운영 방안은 `docs/features/posthog-guide.md`, 시작 화면의 안내 문구는 `docs/policy/copyright-and-data.md` 참고.
