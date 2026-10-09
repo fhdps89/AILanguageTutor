@@ -1,6 +1,6 @@
 import React from 'react';
 import { LibraryItem, SystemStatus } from '../types';
-import { Sparkles, FolderOpen, History, Cpu, Trash2 } from 'lucide-react';
+import { Sparkles, FolderOpen, History, Trash2 } from 'lucide-react';
 
 interface SidebarProps {
   status: SystemStatus;
@@ -17,7 +17,6 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  status,
   demoChecked,
   onDemoChange,
   demoLang = 'zh',
@@ -31,31 +30,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside className="w-full md:w-80 shrink-0 space-y-5 rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200">
-      {/* Vision Engine Status (Gemini dedicated) */}
-      <div className="space-y-2 pb-4 border-b border-slate-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            <Cpu className="h-3.5 w-3.5 text-indigo-500" />
-            <span>AI Vision 엔진</span>
-          </div>
-          <span className="text-[10px] font-mono text-slate-400">build {status.build}</span>
-        </div>
-
-        <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-100 p-2.5 rounded-lg text-xs">
-          <div>
-            <div className="font-semibold text-indigo-950 flex items-center gap-1.5">
-              <span>Google Gemini Vision</span>
-              <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-medium bg-emerald-100 text-emerald-800 rounded">
-                활성
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-              모델: {status.currentModel || 'gemini-3.8-flash'}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Demo Option */}
       <div className="rounded-lg bg-indigo-50/50 p-3.5 border border-indigo-100">
         <label className="flex items-start gap-2.5 cursor-pointer">
