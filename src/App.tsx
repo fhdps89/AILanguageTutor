@@ -7,7 +7,7 @@ import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
 import { LibrarySheet } from './components/LibrarySheet';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from './types';
-import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon, Camera, Loader2 } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
 
 // 예시 수업(demo-arc, demo-chinese)은 내 수업이 아니다. Sidebar의 isDemo 판단과 같은 기준.
@@ -394,6 +394,10 @@ export function App() {
     setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
 
+  // 업로드 칸은 사진을 고른 뒤, 또는 수업이 없는 날 사진 한도를 다 쓴 때만 보인다
+  const isPhotoLimitReached = Boolean(quota && quota.analyze.remaining === 0);
+  const showUploadCard = Boolean(selectedFile) || (isPhotoLimitReached && !currentPage);
+
   const canContinueFromLibrary = Boolean(bookmark || pickLatestOwn(library));
 
   const handleContinueFromLibrary = () => {
@@ -607,9 +611,15 @@ export function App() {
               onOpenLibrary={handleOpenLibrary}
             />
           )}
+          {isLoading && !showUploadCard && (
+            <div role="status" className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-600" />
+              <span>{loadingMessage}</span>
+            </div>
+          )}
           <UploadSection
             ref={uploadRef}
-            hidden={!currentPage && !isLoading && !selectedFile && !(quota && quota.analyze.remaining === 0)}
+            hidden={!showUploadCard}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
@@ -791,6 +801,19 @@ export function App() {
                   pageData={currentPage}
                   sentences={currentPage.sentences || []}
                 />
+              </div>
+
+              {/* 수업이 열려 있을 때 새 책을 올리는 입구 */}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => uploadRef.current?.openFilePicker()}
+                  disabled={isLoading || isPhotoLimitReached}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 shadow-xs transition hover:bg-indigo-50 disabled:opacity-50 cursor-pointer"
+                >
+                  <Camera className="h-4 w-4" />
+                  {isPhotoLimitReached ? '오늘 사진 한도를 다 썼어요 (밤 12시에 다시)' : '새 책 올려 보기'}
+                </button>
               </div>
             </div>
           ) : null}
