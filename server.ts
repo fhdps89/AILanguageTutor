@@ -78,6 +78,9 @@ const DAILY_LIMITS = {
   ANALYZE_GLOBAL_MAX: 100,  // Gemini 유료 등급 전환 전 임시값. 전환 후 실제 한도를 보고 한 곳에서 조정
   ANALYZE_DEVICE_MAX: 30,   // 기기당 일일 사진 분석 한도
   ANALYZE_ANONYMOUS_MAX: 3, // 식별자 없는 anonymous 일일 사진 분석 한도
+  REPORT_GLOBAL_MAX: 500,   // 서버 전체 일일 오류 신고 한도
+  REPORT_DEVICE_MAX: 30,    // 기기당 일일 오류 신고 한도
+  REPORT_ANONYMOUS_MAX: 5,  // 식별자 없는 anonymous 일일 오류 신고 한도
 };
 
 const LIMIT_MESSAGES = {
@@ -85,11 +88,65 @@ const LIMIT_MESSAGES = {
   TTS_GLOBAL_LIMIT: '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.',
   ANALYZE_DEVICE_LIMIT: '오늘 분석할 수 있는 사진 수를 모두 사용했어요. 이미 만든 수업은 서재에서 계속 볼 수 있어요.',
   ANALYZE_GLOBAL_LIMIT: '오늘은 많은 분이 이용해서 사진 분석이 잠시 쉬고 있어요. 이미 만든 수업은 서재에서 계속 볼 수 있어요. 내일 다시 와 주세요.',
+  REPORT_LIMIT: '오늘은 신고를 더 받을 수 없어요.',
 };
 
+// ==========================================
+// 사용 기록 창구 (PostHog 전달)
+// ==========================================
+// 기기 ID와 모집 경로 꼬리표(src)만 보낸다. 이름·이메일·사진·문장 내용·IP는 보내지 않는다.
+// POSTHOG_KEY가 없으면 아무것도 하지 않는다(로컬 개발용).
+const POSTHOG_CAPTURE_TIMEOUT_MS = 3000;
+const DEVICE_INFO_MAX = 5000;
+const deviceInfo = new Map<string, { src: string | null; internal: boolean }>();
+
+function updateDeviceInfo(deviceId: string, src: string | null, internal: boolean | null) {
+  const prev = deviceInfo.get(deviceId);
+  if (!prev) {
+    if (deviceInfo.size >= DEVICE_INFO_MAX) {
+      const oldest = deviceInfo.keys().next().value;
+      if (oldest !== undefined) deviceInfo.delete(oldest);
+    }
+    deviceInfo.set(deviceId, { src, internal: internal === true });
+    return;
+  }
+  // 처음 꼬리표를 유지하고, internal은 새 값으로 덮어쓴다
+  if (!prev.src && src) prev.src = src;
+  if (internal !== null) prev.internal = internal;
+}
+
+// 기다리지 않고 보낸다. 실패해도 예외를 밖으로 던지지 않는다.
+function captureEvent(name: string, deviceId: string, props: Record<string, unknown> = {}) {
+  try {
+    const apiKey = process.env.POSTHOG_KEY;
+    if (!apiKey) return;
+    const host = (process.env.POSTHOG_HOST || 'https://us.i.posthog.com').replace(/\/+$/, '');
+    const info = deviceInfo.get(deviceId);
+    const merged: Record<string, unknown> = { ...props, $geoip_disable: true };
+    if (info) {
+      if (info.src) merged.src = info.src;
+      merged.internal = info.internal;
+    }
+    fetch(`${host}/i/v0/e/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        event: name,
+        distinct_id: deviceId,
+        properties: merged,
+        timestamp: new Date().toISOString(),
+      }),
+      signal: AbortSignal.timeout(POSTHOG_CAPTURE_TIMEOUT_MS),
+    }).catch((e) => console.warn('[Analytics] capture failed:', e?.message || e));
+  } catch (e: any) {
+    console.warn('[Analytics] capture failed:', e?.message || e);
+  }
+}
+
 class RateLimitError extends Error {
-  code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT';
-  constructor(code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT', message: string) {
+  code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT' | 'REPORT_LIMIT';
+  constructor(code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT' | 'REPORT_LIMIT', message: string) {
     super(message);
     this.name = 'RateLimitError';
     this.code = code;
@@ -102,6 +159,8 @@ interface DailyUsageState {
   globalAnalyzeCount: number;
   deviceTtsCounts: Map<string, number>;
   deviceAnalyzeCounts: Map<string, number>;
+  globalReportCount: number;
+  deviceReportCounts: Map<string, number>;
 }
 
 function getCurrentDayKey(): string {
@@ -121,6 +180,8 @@ let dailyUsage: DailyUsageState = {
   globalAnalyzeCount: 0,
   deviceTtsCounts: new Map(),
   deviceAnalyzeCounts: new Map(),
+  globalReportCount: 0,
+  deviceReportCounts: new Map(),
 };
 
 function getDailyState(): DailyUsageState {
@@ -132,6 +193,8 @@ function getDailyState(): DailyUsageState {
       globalAnalyzeCount: 0,
       deviceTtsCounts: new Map(),
       deviceAnalyzeCounts: new Map(),
+      globalReportCount: 0,
+      deviceReportCounts: new Map(),
     };
   }
   return dailyUsage;
@@ -181,6 +244,21 @@ function checkAndIncrementAnalyzeLimit(deviceId: string) {
   state.globalAnalyzeCount += 1;
   state.deviceAnalyzeCounts.set(safeId, currentDeviceCount + 1);
   console.log(`[Analyze Quota] Global: ${state.globalAnalyzeCount}/${DAILY_LIMITS.ANALYZE_GLOBAL_MAX}`);
+}
+
+function checkAndIncrementReportLimit(deviceId: string) {
+  const state = getDailyState();
+  const safeId = (deviceId || 'anonymous').trim() || 'anonymous';
+
+  const maxForDevice = safeId === 'anonymous' ? DAILY_LIMITS.REPORT_ANONYMOUS_MAX : DAILY_LIMITS.REPORT_DEVICE_MAX;
+  const currentDeviceCount = state.deviceReportCounts.get(safeId) || 0;
+
+  if (state.globalReportCount >= DAILY_LIMITS.REPORT_GLOBAL_MAX || currentDeviceCount >= maxForDevice) {
+    throw new RateLimitError('REPORT_LIMIT', LIMIT_MESSAGES.REPORT_LIMIT);
+  }
+
+  state.globalReportCount += 1;
+  state.deviceReportCounts.set(safeId, currentDeviceCount + 1);
 }
 
 interface QuotaInfo {
@@ -312,6 +390,9 @@ app.use(
   })
 );
 
+// 오류 신고는 작은 본문만 받는다 (전역 20mb 파서보다 먼저 걸려야 이 경로 한도가 적용된다)
+app.use('/api/report', express.json({ limit: '2kb' }));
+app.use('/api/event', express.json({ limit: '2kb' }));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use('/api/', generalLimiter);
@@ -868,6 +949,120 @@ app.get('/api/demo', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error in /api/demo:', err);
     res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
+  }
+});
+
+// 브라우저가 보내는 사용 기록 창구. 허용한 이름·속성만 통과시키고 항상 204로 답한다.
+const ALLOWED_EVENT_NAMES = ['app_open', 'sentence_play_start', 'sentence_complete'];
+
+function pickEventProps(raw: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const p = raw as Record<string, unknown>;
+  if (typeof p.src === 'string' && /^[a-z0-9_-]{1,24}$/.test(p.src)) out.src = p.src;
+  if (typeof p.internal === 'boolean') out.internal = p.internal;
+  if (typeof p.rate === 'number' && [1, 0.75, 0.5].includes(p.rate)) out.rate = p.rate;
+  if (p.mode === 'card' || p.mode === 'relay') out.mode = p.mode;
+  if (p.voice === 'ai' || p.voice === 'browser') out.voice = p.voice;
+  if (typeof p.lang === 'string' && /^[a-z-]{1,10}$/.test(p.lang)) out.lang = p.lang;
+  if (typeof p.lesson_key === 'string' && /^[0-9a-f]{16}$/.test(p.lesson_key)) out.lesson_key = p.lesson_key;
+  if (typeof p.sentence_id === 'string' && p.sentence_id.length <= 40) out.sentence_id = p.sentence_id;
+  return out;
+}
+
+app.post('/api/event', (req: Request, res: Response) => {
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const name = (body as any).name;
+  if (typeof name !== 'string' || !ALLOWED_EVENT_NAMES.includes(name)) {
+    return res.status(400).json({ error: 'invalid event' });
+  }
+  const deviceId = getOwnerId(req);
+  if (deviceId === 'anonymous') return res.status(204).end();
+
+  const props = pickEventProps((body as any).props);
+  updateDeviceInfo(
+    deviceId,
+    typeof props.src === 'string' ? props.src : null,
+    typeof props.internal === 'boolean' ? props.internal : null
+  );
+  // src와 internal은 기기 정보에서 다시 합쳐지므로 속성에서 뺀다
+  delete props.src;
+  delete props.internal;
+  captureEvent(name, deviceId, props);
+  return res.status(204).end();
+});
+
+// 카드 오류 신고: 문장 내용은 받지도 저장하지도 않는다 (교재 키, 문장 번호, 항목만)
+const REPORT_REASONS = new Set(['raw_text', 'translation', 'pronunciation', 'vocabulary', 'other']);
+const REPORT_FILE_MAX_BYTES = 2 * 1024 * 1024;
+
+// 저장은 이 함수 하나로 모았다. 나중에 저장 위치를 분석 도구로 바꿀 때 이 함수만 바꾼다.
+function recordReport(entry: {
+  deviceId: string;
+  lessonKey: string;
+  sentenceId: string;
+  reason: string;
+  language: string | null;
+}) {
+  captureEvent('error_report', entry.deviceId, {
+    lesson_key: entry.lessonKey,
+    sentence_id: entry.sentenceId,
+    reason: entry.reason,
+    lang: entry.language,
+  });
+  const reportPath = path.join(CACHE_DIR, 'reports.jsonl');
+  try {
+    if (fs.existsSync(reportPath) && fs.statSync(reportPath).size > REPORT_FILE_MAX_BYTES) {
+      console.warn('[Report] reports.jsonl is over 2MB, report not saved');
+      return;
+    }
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      device: entry.deviceId,
+      lessonKey: entry.lessonKey,
+      sentenceId: entry.sentenceId,
+      reason: entry.reason,
+      language: entry.language,
+      build: getBuildVersion(),
+    });
+    fs.appendFileSync(reportPath, line + '\n', 'utf-8');
+  } catch (e) {
+    console.warn('[Report] failed to save report', e);
+  }
+}
+
+app.post('/api/report', async (req: Request, res: Response) => {
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const { lessonKey, sentenceId, reason } = body as Record<string, unknown>;
+  if (
+    typeof lessonKey !== 'string' || !/^[a-zA-Z0-9_-]{1,40}$/.test(lessonKey) ||
+    typeof sentenceId !== 'string' || !/^s\d{2,3}$/.test(sentenceId) ||
+    typeof reason !== 'string' || !REPORT_REASONS.has(reason)
+  ) {
+    return res.status(400).json({ error: '신고 내용이 올바르지 않아요.' });
+  }
+
+  const deviceId = getOwnerId(req);
+  try {
+    checkAndIncrementReportLimit(deviceId);
+  } catch (err: any) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({ error: '오늘은 신고를 더 받을 수 없어요.', code: 'REPORT_LIMIT' });
+    }
+    throw err;
+  }
+
+  try {
+    const lib = await loadLibraryAsync();
+    const item = lib.find((l: any) => l.key === lessonKey);
+    const language: string | null =
+      item?.language?.code || (lessonKey === 'demo-arc' ? 'fr' : lessonKey === 'demo-chinese' ? 'zh' : null);
+    recordReport({ deviceId, lessonKey, sentenceId, reason, language });
+    console.log(`[Report] ${lessonKey}/${sentenceId} ${reason}`);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('Error in /api/report:', e);
+    return res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
   }
 });
 

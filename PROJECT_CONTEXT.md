@@ -74,4 +74,5 @@
 - 🧠 **[튜터 프롬프트 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
 - 📜 **[KST 기준 버전별 무삭제 변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**
 - 🇰🇷 **[한국어 원서 모드 상세 기획 (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
+- 📊 **[사용 기록 (docs/features/analytics.md)](./docs/features/analytics.md)**
 - 🛠️ **[장애 분석 및 트러블슈팅 (docs/troubleshooting/incident-analysis.md)](./docs/troubleshooting/incident-analysis.md)**
