@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
 import { Play, Square, Volume2, Bookmark, Loader2 } from 'lucide-react';
-import { playSentenceAudio, stopAllAudio } from '../utils/audio';
+import { playSentenceAudio, stopAllAudio, getDeviceId } from '../utils/audio';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 
 type Rate = 1.0 | 0.75 | 0.5;
@@ -18,7 +18,20 @@ interface SentenceCardProps {
   onSelect: (id: string) => void;
   preferredRate: Rate;
   onRateChange: (rate: Rate) => void;
+  lessonKey?: string | null;
 }
+
+// 오류 신고 항목 (서버 /api/report의 reason 값과 같다)
+const REPORT_OPTIONS: { reason: string; label: string }[] = [
+  { reason: 'raw_text', label: '원문 글자가 틀려요' },
+  { reason: 'translation', label: '번역이 틀려요' },
+  { reason: 'pronunciation', label: '발음·음성이 이상해요' },
+  { reason: 'vocabulary', label: '단어 뜻이 틀려요' },
+  { reason: 'other', label: '기타' },
+];
+
+// 이번 화면 세션 동안 이미 신고한 카드 (새로고침하면 비워진다)
+const reportedCards = new Set<string>();
 
 const RATE_OPTIONS: { rate: Rate; big: string; small: string }[] = [
   { rate: 1.0, big: '1.0x', small: '보통' },
@@ -76,6 +89,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   onSelect,
   preferredRate,
   onRateChange,
+  lessonKey,
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   // 재생이 한 번 끝까지 간 뒤에만 true (펼친 줄 위쪽 상태 표시용)
@@ -93,6 +107,47 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   // 아래쪽 접이식 항목 (구문 분석도, 핵심 어휘)
   const [showSyntax, setShowSyntax] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
+
+  // 오류 신고: idle(버튼) → choosing(항목 고르기) → sending → done(고마워요) / error(다시 눌러 주세요)
+  const reportId = lessonKey ? `${lessonKey}/${sentence.id}` : null;
+  const [reportStep, setReportStep] = useState<'idle' | 'choosing' | 'sending' | 'done' | 'error'>(
+    reportId && reportedCards.has(reportId) ? 'done' : 'idle'
+  );
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  // 다른 수업으로 바뀌어 같은 문장 번호가 재사용될 때 신고 상태를 새로 맞춘다
+  useEffect(() => {
+    setReportStep(reportId && reportedCards.has(reportId) ? 'done' : 'idle');
+    setReportError(null);
+  }, [reportId]);
+
+  const sendReport = async (reason: string) => {
+    if (!lessonKey || !reportId) return;
+    setReportStep('sending');
+    setReportError(null);
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': getDeviceId() },
+        body: JSON.stringify({ lessonKey, sentenceId: sentence.id, reason }),
+      });
+      if (!res.ok) {
+        let msg = '지금은 전송이 안 돼요. 나중에 다시 눌러 주세요.';
+        if (res.status === 429) {
+          const data = await res.json().catch(() => null);
+          if (data?.error) msg = data.error;
+        }
+        setReportError(msg);
+        setReportStep('error');
+        return;
+      }
+      reportedCards.add(reportId);
+      setReportStep('done');
+    } catch {
+      setReportError('지금은 전송이 안 돼요. 나중에 다시 눌러 주세요.');
+      setReportStep('error');
+    }
+  };
 
   const textToSpeak = sentence.tts_text || sentence.raw_text;
   const langParam = language?.name_en || language?.code || 'en-US';
@@ -745,6 +800,53 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                 {isFrench ? '🗣️ 연음' : isChineseMode ? '🗣️ 성조/발음 팁' : '🗣️ 발음'}:
               </span>
               <span>{pronHint}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 오류 신고: 눈에 띄지 않게 맨 아래에 작게 둔다 */}
+      {lessonKey && (
+        <div className="mt-3 border-t border-slate-100 pt-2">
+          {reportStep === 'done' ? (
+            <p className="py-2 text-xs text-slate-600">알려 주셔서 고마워요</p>
+          ) : reportStep === 'idle' || reportStep === 'error' ? (
+            <div className="flex flex-wrap items-center gap-x-3">
+              <button
+                type="button"
+                onClick={() => setReportStep('choosing')}
+                className="min-h-11 px-1 text-xs text-slate-600 underline underline-offset-2 hover:text-indigo-700 cursor-pointer"
+              >
+                이 설명이 틀렸어요
+              </button>
+              {reportStep === 'error' && reportError && (
+                <span role="status" className="text-xs text-red-700">{reportError}</span>
+              )}
+            </div>
+          ) : (
+            <div role="group" aria-label="어떤 부분이 틀렸나요?">
+              <p className="pb-1 text-xs text-slate-600">어떤 부분이 틀렸나요?</p>
+              <div className="flex flex-wrap gap-2">
+                {REPORT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.reason}
+                    type="button"
+                    disabled={reportStep === 'sending'}
+                    onClick={() => sendReport(opt.reason)}
+                    className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50 cursor-pointer"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={reportStep === 'sending'}
+                  onClick={() => setReportStep('idle')}
+                  className="min-h-11 px-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  취소
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -787,6 +787,7 @@ export function App() {
                       onSelect={setExpandedId}
                       preferredRate={preferredRate}
                       onRateChange={setPreferredRate}
+                      lessonKey={currentKey}
                     />
                   );
                 })}
