@@ -1341,6 +1341,15 @@ app.post(
         });
       }
 
+      // RECITATION: 모델이 책 속 글을 그대로 옮기는 것을 제한한 경우. 재시도해도 같은 결과일 수 있어 "일시적 오류"와 구분해 안내한다.
+      // 이미 모델을 호출했으므로 일일 사진 분석 한도는 그대로 차감된다.
+      if (finalCode === 'RECITATION') {
+        return res.status(400).json({
+          error: '이 페이지는 AI가 책 속 글을 그대로 옮기는 것을 제한하는 기준에 걸려 분석되지 못했어요. 다른 페이지로 다시 시도해 주세요.',
+          code: 'RECITATION',
+        });
+      }
+
       return res.status(500).json({
         error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.',
         code: finalCode,

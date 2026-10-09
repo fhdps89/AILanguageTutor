@@ -521,7 +521,7 @@ export function App() {
         return;
       }
       setErrorMessage(err.message || '사진 분석에 실패했습니다.');
-      if (err.status === 429 || err.code === 'ANALYZE_GLOBAL_LIMIT') {
+      if (err.status === 429 || err.code === 'ANALYZE_GLOBAL_LIMIT' || err.code === 'RECITATION') {
         setErrorCode(null);
       } else {
         setErrorCode(err.code || null);
