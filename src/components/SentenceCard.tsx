@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
 import { Play, Pause, Volume2, Bookmark, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { playSentenceAudio, stopAllAudio } from '../utils/audio';
@@ -11,6 +11,10 @@ interface SentenceCardProps {
   practiceAudioUrl?: string | null;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
+  index: number;
+  isExpanded: boolean;
+  onSelect: (id: string) => void;
+  preferredRate: 1.0 | 0.75 | 0.5;
 }
 
 export const SentenceCard: React.FC<SentenceCardProps> = ({
@@ -19,7 +23,14 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   rawAudioUrl,
   isBookmarked = false,
   onToggleBookmark,
+  index,
+  isExpanded,
+  onSelect,
+  preferredRate,
 }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  // 재생이 한 번 끝까지 간 뒤에만 true (펼친 줄 위쪽 상태 표시용)
+  const [hasFinished, setHasFinished] = useState(false);
   // activePlayRate: currently playing rate (1.0 | 0.75 | 0.5), null if idle
   const [activePlayRate, setActivePlayRate] = useState<1.0 | 0.75 | 0.5 | null>(null);
   const [activeChunk, setActiveChunk] = useState<string | null>(null);
@@ -41,9 +52,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const isKoreanMode = (language?.code || '').startsWith('ko');
   const isChineseMode = (language?.code || '').startsWith('zh');
 
-  const handlePlayRate = (rate: 1.0 | 0.75 | 0.5) => {
-    // If currently playing or preparing this exact rate, toggle stop
-    if (activePlayRate === rate || (preparingMessage && activePlayRate === rate)) {
+  const handlePlayRate = (rate: 1.0 | 0.75 | 0.5, force = false) => {
+    // If currently playing or preparing this exact rate, toggle stop (줄을 눌러 시작할 때는 항상 새로 재생)
+    if (!force && (activePlayRate === rate || (preparingMessage && activePlayRate === rate))) {
       stopAllAudio();
       setActivePlayRate(null);
       setPreparingMessage(null);
@@ -54,6 +65,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     stopAllAudio();
     setActiveChunk(null);
     setActiveVocab(null);
+    setHasFinished(false);
     setPlaybackTime({ currentTime: 0, duration: 0 });
 
     playSentenceAudio({
@@ -73,6 +85,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       onEnd: () => {
         setActivePlayRate(null);
         setPreparingMessage(null);
+        setHasFinished(true);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
       onError: () => {
@@ -82,6 +95,30 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       },
     });
   };
+
+  // 접힌 줄을 누르면: 이 줄을 펼치고(이전 줄은 접힘) 고른 속도로 바로 재생
+  const handleRowTap = () => {
+    onSelect(sentence.id);
+    handlePlayRate(preferredRate, true);
+    // 위쪽 줄이 접히며 위치가 밀려도 펼친 카드가 화면 안에 보이게 한다
+    setTimeout(() => {
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
+  };
+
+  // 접히는 순간 이 카드의 재생 상태를 비운다 (소리는 다른 줄이 시작되면 playSentenceAudio가 끊는다)
+  const wasExpandedRef = useRef(isExpanded);
+  useEffect(() => {
+    if (wasExpandedRef.current && !isExpanded) {
+      setActivePlayRate(null);
+      setActiveChunk(null);
+      setActiveVocab(null);
+      setPreparingMessage(null);
+      setHasFinished(false);
+      setPlaybackTime({ currentTime: 0, duration: 0 });
+    }
+    wasExpandedRef.current = isExpanded;
+  }, [isExpanded]);
 
   const handlePlayChunk = (chunkText: string) => {
     if (activeChunk === chunkText) {
@@ -194,15 +231,53 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   const hasVocab = sentence.vocabulary && sentence.vocabulary.length > 0;
   const hasSyntax = !!sentence.syntax_diagram && !isKoreanMode;
 
+  const rateLabel = (r: number) => (r === 1 ? '1.0' : String(r));
+
+  if (!isExpanded) {
+    return (
+      <div id={`sentence-${sentence.id}`} ref={rootRef} className="scroll-mt-24">
+        <button
+          type="button"
+          onClick={handleRowTap}
+          aria-expanded={false}
+          aria-label={`${index + 1}번 문장 듣기: ${sentence.raw_text}`}
+          className={`flex w-full min-h-[60px] items-center gap-3 rounded-xl border px-3 py-2 text-left shadow-sm transition cursor-pointer ${
+            isBookmarked
+              ? 'bg-amber-50/40 border-amber-400 hover:bg-amber-50'
+              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+            <Play className="h-5 w-5 fill-current" />
+          </span>
+          <span className="w-6 shrink-0 text-xs font-bold text-slate-600 tabular-nums">{index + 1}</span>
+          <span className="min-w-0 flex-1 truncate font-serif text-base text-slate-900">{sentence.raw_text}</span>
+          {isBookmarked && (
+            <span className="shrink-0 text-sm" aria-label="내일 시작할 문장">
+              📍
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       id={`sentence-${sentence.id}`}
-      className={`rounded-xl p-4 sm:p-5 shadow-sm border transition scroll-mt-24 ${
-        isBookmarked
-          ? 'bg-amber-50/40 border-amber-400 ring-2 ring-amber-300/70 shadow-amber-100/50'
-          : 'bg-white border-slate-200 hover:border-slate-300'
-      }`}
+      ref={rootRef}
+      aria-expanded={true}
+      className="rounded-xl p-4 sm:p-5 shadow-sm border transition scroll-mt-24 bg-blue-50/40 border-blue-600 ring-1 ring-blue-200"
     >
+      {/* 상태 표시 한 줄 */}
+      <div className="mb-2 min-h-[1.5rem] text-sm font-semibold text-blue-700" aria-live="polite">
+        {activePlayRate !== null
+          ? `재생 중 ${rateLabel(activePlayRate)}x`
+          : hasFinished
+          ? '재생 끝'
+          : ''}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 gap-2">
         <div className="flex items-center flex-wrap gap-2">
@@ -250,11 +325,6 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             {language ? `${language.flag} ${language.name_ko}:` : '원문:'}
           </span>
-          {isAudioPlaying && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
-              🎤 노래방 싱크 진행 중 ({activePlayRate}x)
-            </span>
-          )}
         </div>
         <p className="text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
           {renderKaraokeText(

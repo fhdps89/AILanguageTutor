@@ -44,6 +44,9 @@ export function App() {
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [showPhoto, setShowPhoto] = useState(false);
+  // 펼쳐진 문장 카드 id (수업을 열면 하나도 펼치지 않음) / 고른 듣기 속도 (R8에서 바뀐다)
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [preferredRate] = useState<1.0 | 0.75 | 0.5>(1.0);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -151,6 +154,11 @@ export function App() {
       window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
     };
   }, []);
+
+  // 다른 수업이 열리면 펼친 문장을 모두 접는다
+  useEffect(() => {
+    setExpandedId(null);
+  }, [currentKey]);
 
   // Refresh quota when tab becomes visible
   useEffect(() => {
@@ -360,18 +368,22 @@ export function App() {
     } catch {}
   };
 
-  const handleResumeBookmark = () => {
+  const handleResumeBookmark = async () => {
     if (!bookmark) return;
 
     if (currentKey !== bookmark.lessonKey) {
-      loadLesson(bookmark.lessonKey);
+      await loadLesson(bookmark.lessonKey);
     }
 
+    // 해당 문장을 펼치기만 한다 (자동 재생은 하지 않는다)
     setTimeout(() => {
-      const el = document.getElementById(`sentence-${bookmark.sentenceId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      setExpandedId(bookmark.sentenceId);
+      setTimeout(() => {
+        const el = document.getElementById(`sentence-${bookmark.sentenceId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
     }, 300);
   };
 
@@ -732,9 +744,12 @@ export function App() {
               {/* Sentence Breakdown List */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    문장별 쉐도잉 훈련 ({currentPage.sentences?.length || 0}문장)
-                  </h3>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                      문장별 쉐도잉 훈련 ({currentPage.sentences?.length || 0}문장)
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">🔊 문장을 누르면 바로 들려요</p>
+                  </div>
                   {quota && (
                     <span
                       aria-live="polite"
@@ -747,7 +762,7 @@ export function App() {
                   )}
                 </div>
 
-                {currentPage.sentences?.map((sentence) => {
+                {currentPage.sentences?.map((sentence, index) => {
                   const isBookmarked = bookmark?.lessonKey === currentKey && bookmark?.sentenceId === sentence.id;
 
                   return (
@@ -757,6 +772,10 @@ export function App() {
                       language={currentPage.language}
                       isBookmarked={isBookmarked}
                       onToggleBookmark={() => handleToggleBookmark(sentence.id, sentence.raw_text)}
+                      index={index}
+                      isExpanded={expandedId === sentence.id}
+                      onSelect={setExpandedId}
+                      preferredRate={preferredRate}
                     />
                   );
                 })}
