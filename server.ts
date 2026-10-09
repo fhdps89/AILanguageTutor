@@ -58,6 +58,13 @@ if (!fs.existsSync(TTS_CACHE_DIR)) {
 }
 
 // ==========================================
+// 지원 언어 (사진 분석 허용 목록)
+// ==========================================
+// 언어 코드 앞부분(소문자, '-' 앞) 기준. 목록에 없는 언어의 사진은 저장하지 않고 안내 문구로 돌려보낸다.
+// 일본어(ja)는 이 레포에서 품질을 확인한 적이 없다. 확인 전까지 빼려면 이 목록과 첫 화면 문구를 함께 고친다.
+const SUPPORTED_LANG_PREFIXES = ['fr', 'en', 'zh', 'ja'];
+
+// ==========================================
 // 일일 호출 한도 설정 (상수 모음)
 // ==========================================
 // 날짜 변경 기준 시각 (Google 초기화 시각에 맞춰 조정 필요)
@@ -1353,6 +1360,21 @@ app.post(
       return res.status(500).json({
         error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.',
         code: finalCode,
+      });
+    }
+
+    // 지원 외 언어 거절: 저장(page.json, page.jpg, 서재 항목)을 만들지 않는다.
+    // 이미 모델을 호출했으므로 일일 사진 분석 한도는 그대로 차감한다.
+    const detectedLangPrefix = String(pageData.language?.code || '').trim().toLowerCase().split('-')[0];
+    if (detectedLangPrefix && !SUPPORTED_LANG_PREFIXES.includes(detectedLangPrefix)) {
+      console.log(`[OCR] unsupported language: ${detectedLangPrefix}`);
+      const rawLangName = String(pageData.language?.name_ko || '').trim();
+      // 사진 속 글이 모델 출력을 거쳐 안내문에 들어가므로 길이와 글자 종류를 제한한다.
+      const safeLangName = /^[가-힣A-Za-z ]{1,20}$/.test(rawLangName) ? rawLangName : '';
+      const detected = safeLangName ? ` 이 사진은 ${safeLangName} 페이지로 보여요.` : '';
+      return res.status(400).json({
+        error: `지금은 중국어·프랑스어·영어·일본어 책 페이지만 지원해요.${detected} 지원하는 언어의 페이지로 다시 시도해 주세요.`,
+        code: 'UNSUPPORTED_LANGUAGE',
       });
     }
 

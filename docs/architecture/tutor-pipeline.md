@@ -15,6 +15,11 @@
 - **모델:** `gemini-3.8-flash`
 - **구조화된 출력 (Structured Output):** JSON Schema 엄격 강제 (`responseMimeType: "application/json"`)
 
+### 2.3 지원 언어 검사와 분석 실패 안내 (`/api/analyze`)
+- **지원 언어:** `SUPPORTED_LANG_PREFIXES = ['fr', 'en', 'zh', 'ja']` (언어 코드 앞부분 기준). 일본어는 품질을 아직 확인하지 않았다.
+- **지원 외 언어:** 모델 분석이 끝난 뒤 언어 코드를 검사해, 목록에 없으면 저장(`page.json`, `page.jpg`, 서재 항목) 없이 HTTP 400과 `UNSUPPORTED_LANGUAGE` 코드, 안내 문구로 응답한다. 언어 이름은 한글·영문·공백 20자 이하일 때만 문구에 넣는다. 언어 코드가 비어 있으면 거절하지 않고 기존대로 진행한다. 이미 모델을 호출했으므로 일일 사진 분석 한도는 차감된다.
+- **실패 안내:** 안전 기준(`SAFETY_BLOCKED`)과 글 그대로 옮기기 제한(`RECITATION`)은 HTTP 400과 전용 문구로, 그 밖의 실패는 HTTP 500과 "일시적인 오류예요..." 문구와 분류 코드로 응답한다. 화면은 `RECITATION`, `UNSUPPORTED_LANGUAGE`, 429 응답에서 "(오류 코드: ...)"를 붙이지 않는다.
+
 ---
 
 ## 3. 양방향 튜터링 라우팅 (Bilingual Routing Engine)
