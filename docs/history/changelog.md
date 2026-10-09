@@ -6,6 +6,25 @@
 
 ---
 
+## [2026-10-09 KST] 분석 및 음성 응답 내 실시간 잔여 쿼터(`quota`) 필드 통합
+- **기능 배경 (Context):**
+  - 클라이언트 화면이 추가 API 호출 없이도 사진 분석 및 음성 합성 성공/한도초과 시 최신 쿼터 상태를 즉시 수신할 수 있도록 기존 주요 API 응답에 `quota` 필드 탑재.
+- **적용된 수정 내역 (`server.ts`):**
+  - `POST /api/analyze`:
+    - 신규 이미지 OCR 분석 성공 응답에 `quota` 객체 추가 (`reused: false`).
+    - 캐시 히트 이미지 재사용 성공 응답에 `quota` 객체 추가 (`reused: true`).
+    - 기기 일일 분석 한도 초과 시 429 응답에 `quota` 객체 추가 (기존 `error`, `code: 'ANALYZE_DEVICE_LIMIT'` 완전 보존).
+  - `POST /api/tts/prepare`:
+    - 음성 합성 성공 응답에 `quota` 객체 추가 (기존 `hash`, `audioUrl` 보존).
+    - 일일 음성 한도 초과 시 429 응답에 `quota` 객체 추가 (기존 `error`, `code` 보존).
+  - `analyzeLimiter` (15분 버스트 제한):
+    - rateLimit message 객체에 `code: 'ANALYZE_BURST_LIMIT'` 추가하여 클라이언트가 일일 한도와 15분 버스트 한도를 명확히 구분할 수 있도록 개선.
+- **안정성 및 무결성 보존 (Safety & Integrity):**
+  - 프론트엔드 UI 화면 코드 및 기존 필드 규격 100% 무변경 유지.
+  - `DAILY_LIMITS` 수치 및 한도 차감 시점 보존.
+
+---
+
 ## [2026-10-09 KST] 사용자 일일 잔여 쿼터 조회 엔드포인트 신설 (`GET /api/quota`)
 - **기능 배경 (Context):**
   - 사용자가 당일 남은 사진 분석 장수 및 음성 생성 횟수를 사전에 확인할 수 있도록 안전한 읽기 전용 쿼터 조회 기능 필요.

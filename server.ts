@@ -247,7 +247,7 @@ const generalLimiter = rateLimit({
 const analyzeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: { error: '이미지 분석 요청 한도를 초과했습니다. 15분 후 다시 시도해주세요.' },
+  message: { error: '이미지 분석 요청 한도를 초과했습니다. 15분 후 다시 시도해주세요.', code: 'ANALYZE_BURST_LIMIT' },
   validate: {
     xForwardedForHeader: false,
     forwardedHeader: false,
@@ -1030,10 +1030,15 @@ app.post('/api/tts/prepare', async (req: Request, res: Response) => {
     return res.json({
       hash: result.hash,
       audioUrl: `/api/tts/${result.hash}`,
+      quota: getRemainingQuota(deviceId),
     });
   } catch (err: any) {
     if (err instanceof RateLimitError) {
-      return res.status(429).json({ error: err.message, code: err.code });
+      return res.status(429).json({
+        error: err.message,
+        code: err.code,
+        quota: getRemainingQuota(deviceId),
+      });
     }
     console.error('Error in /api/tts/prepare:', err);
     res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.' });
@@ -1106,46 +1111,47 @@ app.post(
     });
   },
   async (req: Request, res: Response) => {
-  try {
-    let imageBuffer: Buffer | null = null;
-
-    if (req.file) {
-      imageBuffer = req.file.buffer;
-    } else if (req.body.imageBase64) {
-      const b64Data = req.body.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      imageBuffer = Buffer.from(b64Data, 'base64');
-    }
-
-    if (!imageBuffer || imageBuffer.length === 0) {
-      return res.status(400).json({ error: 'No image uploaded' });
-    }
-
-    // Auto-normalize image: decodes HEIC/HEIF/PNG/raw camera JPEG, auto-rotates EXIF orientation, and ensures Gemini Vision compatibility
-    const normalized = await normalizeUploadedImage(imageBuffer);
-    imageBuffer = normalized.buffer;
-    const imageMime = normalized.mimeType;
-
     const callerOwnerId = getOwnerId(req);
-    const digest = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-    const cacheKey = digest.slice(0, 16);
-    const lessonFolder = path.join(CACHE_DIR, cacheKey);
-    const pageJsonFile = path.join(lessonFolder, 'page.json');
+    try {
+      let imageBuffer: Buffer | null = null;
 
-    // 1. Check disk cache
-    if (fs.existsSync(pageJsonFile)) {
-      try {
-        const cachedRaw = await fs.promises.readFile(pageJsonFile, 'utf-8');
-        const cachedData = JSON.parse(cachedRaw);
+      if (req.file) {
+        imageBuffer = req.file.buffer;
+      } else if (req.body.imageBase64) {
+        const b64Data = req.body.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        imageBuffer = Buffer.from(b64Data, 'base64');
+      }
 
-        return res.json({
-          key: cacheKey,
-          page: cachedData,
-          photoUrl: `/api/photo/${cacheKey}`,
-          reused: true,
-          message: '이미 분석한 사진입니다. 캐시를 재사용합니다.',
-        });
-      } catch {}
-    }
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return res.status(400).json({ error: 'No image uploaded' });
+      }
+
+      // Auto-normalize image: decodes HEIC/HEIF/PNG/raw camera JPEG, auto-rotates EXIF orientation, and ensures Gemini Vision compatibility
+      const normalized = await normalizeUploadedImage(imageBuffer);
+      imageBuffer = normalized.buffer;
+      const imageMime = normalized.mimeType;
+
+      const digest = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+      const cacheKey = digest.slice(0, 16);
+      const lessonFolder = path.join(CACHE_DIR, cacheKey);
+      const pageJsonFile = path.join(lessonFolder, 'page.json');
+
+      // 1. Check disk cache
+      if (fs.existsSync(pageJsonFile)) {
+        try {
+          const cachedRaw = await fs.promises.readFile(pageJsonFile, 'utf-8');
+          const cachedData = JSON.parse(cachedRaw);
+
+          return res.json({
+            key: cacheKey,
+            page: cachedData,
+            photoUrl: `/api/photo/${cacheKey}`,
+            reused: true,
+            message: '이미 분석한 사진입니다. 캐시를 재사용합니다.',
+            quota: getRemainingQuota(callerOwnerId),
+          });
+        } catch {}
+      }
 
     // 2. Perform OCR analysis using Google Gemini Vision
     // Rate limit check before calling Gemini Vision model
@@ -1369,10 +1375,15 @@ app.post(
       page: pageData,
       photoUrl: `/api/photo/${cacheKey}`,
       reused: false,
+      quota: getRemainingQuota(callerOwnerId),
     });
   } catch (err: any) {
     if (err instanceof RateLimitError) {
-      return res.status(429).json({ error: err.message, code: err.code });
+      return res.status(429).json({
+        error: err.message,
+        code: err.code,
+        quota: getRemainingQuota(callerOwnerId),
+      });
     }
     if (err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED') {
       return res.status(400).json({
