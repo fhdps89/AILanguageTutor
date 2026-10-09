@@ -402,7 +402,7 @@ export function App() {
         photoUrl: null,
       });
       const langName = data.page.language?.name_ko || '외국어';
-      setInfoMessage(`${langName} 데모 페이지("${data.page.title}")를 불러왔습니다. Gemini 원어민 음성으로 바로 학습해보세요.`);
+      setInfoMessage(`${langName} 데모 페이지("${data.page.title}")를 불러왔습니다. AI 합성 음성으로 바로 들어 보세요.`);
     } catch (err: any) {
       setErrorMessage(err.message);
       setErrorCode(null);

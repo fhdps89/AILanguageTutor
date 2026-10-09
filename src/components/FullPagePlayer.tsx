@@ -320,7 +320,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
           </span>
           {isPlaying && (
             <span className="text-xs text-indigo-600 font-medium hidden sm:inline">
-              💡 350ms 자연스러운 숨 고르기와 함께 100% 동기화 재생 중
+              💡 문장 사이 350ms 쉬면서 이어서 재생 중
             </span>
           )}
         </div>
