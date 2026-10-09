@@ -568,23 +568,6 @@ export function App() {
       <Header build={status.build} onOpenLibrary={handleOpenLibrary} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* Sidebar: 휴대폰에서는 사진 고르기 칸 아래로 */}
-        <div className="w-full md:w-80 shrink-0 order-last md:order-first">
-        <Sidebar
-          status={status}
-          demoChecked={demoChecked}
-          onDemoChange={setDemoChecked}
-          demoLang={demoLang}
-          onSelectDemoLang={setDemoLang}
-          library={library}
-          selectedKey={selectedKey}
-          onSelectKey={setSelectedKey}
-          onOpenSelected={() => selectedKey && loadLesson(selectedKey)}
-          onDeleteLesson={handleDeleteLesson}
-          isLoading={isLoading}
-        />
-        </div>
-
         <LibrarySheet
           open={isLibraryOpen}
           onClose={() => setIsLibraryOpen(false)}
@@ -614,15 +597,12 @@ export function App() {
           )}
           <UploadSection
             ref={uploadRef}
-            hidden={!currentPage && !isLoading && !selectedFile && !demoChecked && !(quota && quota.analyze.remaining === 0)}
+            hidden={!currentPage && !isLoading && !selectedFile && !(quota && quota.analyze.remaining === 0)}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
               setBurstLimitMessage(null);
             }}
-            demoChecked={demoChecked}
-            demoLang={demoLang}
-            onRunDemo={handleRunDemo}
             onRunPhoto={handleRunPhoto}
             isLoading={isLoading}
             loadingMessage={loadingMessage}
@@ -633,7 +613,7 @@ export function App() {
 
           {/* Feedback messages */}
           {errorMessage && (
-            <div className="sticky top-4 z-50 flex items-start justify-between gap-3 rounded-xl bg-red-50/95 backdrop-blur-xs border-2 border-red-300 p-4 text-xs sm:text-sm text-red-900 shadow-md">
+            <div className="sticky top-4 z-50 flex items-start justify-between gap-3 rounded-xl bg-red-50/95 backdrop-blur-xs border-2 border-red-300 p-4 text-sm text-red-900 shadow-md">
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
                 <div>
@@ -641,7 +621,7 @@ export function App() {
                   <span className="font-medium leading-relaxed">
                     {errorMessage}
                     {errorCode && (
-                      <span className="text-[11px] sm:text-xs text-red-700/80 font-normal ml-1.5">
+                      <span className="text-xs text-red-800 font-normal ml-1.5">
                         (오류 코드: {errorCode})
                       </span>
                     )}
@@ -663,7 +643,7 @@ export function App() {
           )}
 
           {infoMessage && (
-            <div className="flex items-start gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-800">
+            <div className="flex items-start gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
               <span>{infoMessage}</span>
             </div>
@@ -681,7 +661,7 @@ export function App() {
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded">
                       📍 내일은 여기서부터 시작
                     </span>
-                    <span className="text-[11px] text-amber-700/80">
+                    <span className="text-xs text-amber-800">
                       {new Date(bookmark.updatedAt).toLocaleDateString()} 저장
                     </span>
                   </div>
@@ -703,7 +683,7 @@ export function App() {
                 </button>
                 <button
                   onClick={handleClearBookmark}
-                  className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 transition cursor-pointer"
+                  className="rounded-lg p-1.5 text-slate-600 hover:text-slate-800 hover:bg-amber-100/60 transition cursor-pointer"
                   title="북마크 해제"
                 >
                   <X className="h-4 w-4" />
@@ -716,7 +696,7 @@ export function App() {
           {currentPage ? (
             <div className="space-y-6">
               {/* Disclaimer */}
-              <div className="flex items-center gap-2 rounded-lg bg-amber-50/80 border border-amber-200/70 px-4 py-2.5 text-xs text-amber-800">
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50/80 border border-amber-200/70 px-4 py-2.5 text-sm text-amber-800">
                 <Info className="h-4 w-4 shrink-0 text-amber-600" />
                 <span>
                   {currentPage.disclaimer_ko || '음성은 합성 TTS이며 원어민이 아닙니다. 한글 표기는 힌트([~])일 뿐입니다.'}
@@ -796,6 +776,24 @@ export function App() {
             </div>
           ) : null}
         </main>
+
+        {/* Sidebar: 화면 순서와 Tab 순서가 같도록 main 뒤에 두고, 넓은 화면에서만 왼쪽에 보인다 */}
+        <div className="w-full md:w-80 shrink-0 md:order-first">
+        <Sidebar
+          status={status}
+          demoChecked={demoChecked}
+          onDemoChange={setDemoChecked}
+          demoLang={demoLang}
+          onSelectDemoLang={setDemoLang}
+          onRunDemo={handleRunDemo}
+          library={library}
+          selectedKey={selectedKey}
+          onSelectKey={setSelectedKey}
+          onOpenSelected={() => selectedKey && loadLesson(selectedKey)}
+          onDeleteLesson={handleDeleteLesson}
+          isLoading={isLoading}
+        />
+        </div>
       </div>
     </div>
   );

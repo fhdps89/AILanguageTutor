@@ -256,13 +256,13 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
               전문 연속 낭독 ({playbackSpeed}x)
             </span>
             {language && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
                 <span>{language.flag}</span>
                 <span>{language.name_ko} ({language.name_en})</span>
               </span>
             )}
             {isPlaying && hasSentences && currentSentenceIdx >= 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 animate-pulse">
                 🎤 {currentSentenceIdx + 1} / {sentences.length} 문장 낭독 중
               </span>
             )}
@@ -377,7 +377,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       </div>
 
       {/* Disclaimer & Export */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 text-xs text-slate-500">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 text-sm text-slate-600">
         <span>{pageData.disclaimer_ko || '음성은 합성 TTS이며 원어민이 아닙니다. 발음 표기는 보조 힌트입니다.'}</span>
         <button
           onClick={handleDownloadJson}
