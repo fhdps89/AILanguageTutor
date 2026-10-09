@@ -49,7 +49,7 @@
 
 ### 4. [정책 (Policy)](./policy/)
 - **[사진·저작권 안내의 근거 (copyright-and-data.md)](./policy/copyright-and-data.md)**  
-  - 시작 화면 안내 문장별 근거 코드와 본문과 어긋나 보이는 점(서재 50개 제한, 같은 사진의 폴더 공유)
+  - 시작 화면 안내 문장별 근거 코드와 본문과 어긋나 보이는 점(같은 사진의 폴더 공유)
 
 ### 5. [트러블슈팅 및 장애 분석 (Troubleshooting)](./troubleshooting/)
 - **[장애 분석 및 방어 사례집 (incident-analysis.md)](./troubleshooting/incident-analysis.md)**  
