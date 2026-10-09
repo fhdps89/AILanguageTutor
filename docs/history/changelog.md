@@ -6,8 +6,15 @@
 
 ---
 
-## [2026-10-09 KST] 사진 분석 일일 사용 한도 추가
-- 사진 분석 일일 사용 한도 추가
+## [2026-10-09 KST] 공개 문서의 표현 정리
+- `docs/troubleshooting/incident-analysis.md` 4절을 일반 표현으로 줄이고(제목 "일일 사용 한도와 오류 문구 정리"), 서버 전체 사진 분석 한도(100장)와 `ANALYZE_GLOBAL_LIMIT` 코드를 방어 설명에 반영했다.
+- 이 변경 이력의 오류 응답 관련 항목도 같은 기준으로 한 줄 요약으로 줄였다. 코드 변경 없음.
+
+---
+
+## [2026-10-09 KST] 사진 분석 서버 전체 일일 한도 추가
+- 사진 분석에 서버 전체 일일 한도(100장, `DAILY_LIMITS.ANALYZE_GLOBAL_MAX`)를 추가했다. 기기당 한도(30장)와 함께 적용되며, 한도 도달 시 429와 `ANALYZE_GLOBAL_LIMIT` 코드, 쉬운 한국어 안내 문구로 응답한다. 이미 분석한 사진(캐시 재사용)은 세지 않는다.
+- 숫자는 Gemini 유료 등급 전환 전 임시값이며 실제 한도를 확인한 뒤 한 곳(`DAILY_LIMITS`)에서 조정한다.
 
 ---
 
@@ -159,7 +166,7 @@
 - **표준 실패 원인 분류 코드 도입 (Standardized Failure Reason Codes):**
   - 최종 분석 실패 응답 JSON에 `code` 필드 추가: `SAFETY_BLOCKED`, `RECITATION`, `EMPTY_RESPONSE`, `JSON_PARSE`, `MODEL_FAILED`, `UNKNOWN` 6종 한정.
   - 두 모델 중 하나라도 `SAFETY_BLOCKED` 시 안전 안내 문구와 코드를 즉시 반환하도록 `some` 판정 적용.
-  - 오류 응답에 스택 트레이스, 모델명, 키, 내부 경로 노출 완전 차단.
+  - 오류 응답에는 정제된 문구와 분류 코드만 담는다.
 - **클라이언트 화면 오류 코드 표기 (`src/App.tsx`):**
   - 분석 실패 시 서버 응답에 `code`가 포함되어 있을 경우 사용자 안내 배너 끝에 `(오류 코드: ...)` 형태로 표시.
 - **동적 빌드 버전 생성 시스템 (`server.ts`):**
@@ -206,8 +213,8 @@
   - 상한 도달 시 HTTP 429 및 표준 코드(`TTS_DEVICE_LIMIT`, `TTS_GLOBAL_LIMIT`, `ANALYZE_DEVICE_LIMIT`)와 쉬운 한국어 안내 문구 반환.
   - 프론트엔드에서 429 수신 시 브라우저 기본 음성(Web Speech API)으로 몰래 바뀌는 현상을 방지하고, 상단 고정 안내 배너로 직관적 전달.
   - `FullPagePlayer` 전체 낭독 진행 중 한도 도달 시 불필요한 후속 요청을 방지하도록 재생 릴레이 즉시 안전 중단.
-- **서버 내부 오류 정보 은닉:**
-  - `/api/tts/prepare`, `GET /api/tts`, `/api/analyze`, `/api/demo`, `/api/lesson/:key`의 오류 처리에서 내부 스택 트레이스 노출을 차단하고 표준 정제 문구(`"일시적인 오류예요. 잠시 후 다시 시도해 주세요."`)로 통일.
+- **오류 응답 문구 정리:**
+  - `/api/tts/prepare`, `GET /api/tts`, `/api/analyze`, `/api/demo`, `/api/lesson/:key`의 오류 응답을 표준 문구(`"일시적인 오류예요. 잠시 후 다시 시도해 주세요."`)로 통일.
 - **CORS 출처 제한 강화:**
   - `ALLOWED_ORIGINS` 환경변수를 통한 지정 출처 화이트리스트 및 미설정 시 동일 출처(Same-Origin) 전용 CORS 정책 적용.
 
