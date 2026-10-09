@@ -1,6 +1,7 @@
 import React from 'react';
 import { Camera } from 'lucide-react';
 import { DailyQuota } from '../types';
+import { LandingDemoVideo } from './LandingDemoVideo';
 
 interface LandingHeroProps {
   quota?: DailyQuota | null;
@@ -27,6 +28,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
   return (
     <section className="space-y-3 mb-6">
       {children}
+      <LandingDemoVideo />
       <button
         type="button"
         onClick={onUploadClick}
