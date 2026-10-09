@@ -608,11 +608,13 @@ export function App() {
               quota={quota}
               hasOwnLesson={library.some(isOwnLesson)}
               onUploadClick={() => uploadRef.current?.openFilePicker()}
+              onCameraClick={() => uploadRef.current?.openCamera()}
               onOpenLibrary={handleOpenLibrary}
             />
           )}
           <UploadSection
             ref={uploadRef}
+            hidden={!currentPage && !isLoading && !selectedFile && !demoChecked && !(quota && quota.analyze.remaining === 0)}
             selectedFile={selectedFile}
             onFileSelect={(file) => {
               setSelectedFile(file);
