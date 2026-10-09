@@ -68,6 +68,7 @@ const DAILY_LIMITS = {
   TTS_GLOBAL_MAX: 500,      // 서버 전체 일일 음성 생성 한도. Gemini Tier 2 한도(TTS 하루 10K) 안에서 이 한 곳에서 조정
   TTS_DEVICE_MAX: 100,      // 기기당 일일 음성 생성 한도
   TTS_ANONYMOUS_MAX: 10,    // 식별자 없는 anonymous 일일 음성 생성 한도
+  ANALYZE_GLOBAL_MAX: 100,  // Gemini 유료 등급 전환 전 임시값. 전환 후 실제 한도를 보고 한 곳에서 조정
   ANALYZE_DEVICE_MAX: 30,   // 기기당 일일 사진 분석 한도
   ANALYZE_ANONYMOUS_MAX: 3, // 식별자 없는 anonymous 일일 사진 분석 한도
 };
@@ -76,11 +77,12 @@ const LIMIT_MESSAGES = {
   TTS_DEVICE_LIMIT: '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.',
   TTS_GLOBAL_LIMIT: '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.',
   ANALYZE_DEVICE_LIMIT: '오늘 분석할 수 있는 사진 수를 모두 사용했어요. 이미 만든 수업은 서재에서 계속 볼 수 있어요.',
+  ANALYZE_GLOBAL_LIMIT: '오늘은 많은 분이 이용해서 사진 분석이 잠시 쉬고 있어요. 이미 만든 수업은 서재에서 계속 볼 수 있어요. 내일 다시 와 주세요.',
 };
 
 class RateLimitError extends Error {
-  code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT';
-  constructor(code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT', message: string) {
+  code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT';
+  constructor(code: 'TTS_DEVICE_LIMIT' | 'TTS_GLOBAL_LIMIT' | 'ANALYZE_DEVICE_LIMIT' | 'ANALYZE_GLOBAL_LIMIT', message: string) {
     super(message);
     this.name = 'RateLimitError';
     this.code = code;
@@ -90,6 +92,7 @@ class RateLimitError extends Error {
 interface DailyUsageState {
   dayKey: string;
   globalTtsCount: number;
+  globalAnalyzeCount: number;
   deviceTtsCounts: Map<string, number>;
   deviceAnalyzeCounts: Map<string, number>;
 }
@@ -108,6 +111,7 @@ function getCurrentDayKey(): string {
 let dailyUsage: DailyUsageState = {
   dayKey: getCurrentDayKey(),
   globalTtsCount: 0,
+  globalAnalyzeCount: 0,
   deviceTtsCounts: new Map(),
   deviceAnalyzeCounts: new Map(),
 };
@@ -118,6 +122,7 @@ function getDailyState(): DailyUsageState {
     dailyUsage = {
       dayKey: currentKey,
       globalTtsCount: 0,
+      globalAnalyzeCount: 0,
       deviceTtsCounts: new Map(),
       deviceAnalyzeCounts: new Map(),
     };
@@ -152,6 +157,12 @@ function checkAndIncrementAnalyzeLimit(deviceId: string) {
   const state = getDailyState();
   const safeId = (deviceId || 'anonymous').trim() || 'anonymous';
 
+  // 1. Check Global Analyze Limit
+  if (state.globalAnalyzeCount >= DAILY_LIMITS.ANALYZE_GLOBAL_MAX) {
+    throw new RateLimitError('ANALYZE_GLOBAL_LIMIT', LIMIT_MESSAGES.ANALYZE_GLOBAL_LIMIT);
+  }
+
+  // 2. Check Device Analyze Limit
   const maxForDevice = safeId === 'anonymous' ? DAILY_LIMITS.ANALYZE_ANONYMOUS_MAX : DAILY_LIMITS.ANALYZE_DEVICE_MAX;
   const currentDeviceCount = state.deviceAnalyzeCounts.get(safeId) || 0;
 
@@ -159,8 +170,10 @@ function checkAndIncrementAnalyzeLimit(deviceId: string) {
     throw new RateLimitError('ANALYZE_DEVICE_LIMIT', LIMIT_MESSAGES.ANALYZE_DEVICE_LIMIT);
   }
 
+  // 통과 시에만 카운트 증가 (기기 상한 실패 시에는 올리지 않음)
+  state.globalAnalyzeCount += 1;
   state.deviceAnalyzeCounts.set(safeId, currentDeviceCount + 1);
-  console.log(`[Analyze Quota] Device '${safeId}': ${currentDeviceCount + 1}/${maxForDevice}`);
+  console.log(`[Analyze Quota] Global: ${state.globalAnalyzeCount}/${DAILY_LIMITS.ANALYZE_GLOBAL_MAX}`);
 }
 
 interface QuotaInfo {

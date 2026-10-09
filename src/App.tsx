@@ -470,6 +470,7 @@ export function App() {
         }
         const errorObj: any = new Error(errData.error || '사진 분석에 실패했습니다.');
         errorObj.code = errData.code;
+        errorObj.status = res.status;
         throw errorObj;
       }
 
@@ -520,7 +521,11 @@ export function App() {
         return;
       }
       setErrorMessage(err.message || '사진 분석에 실패했습니다.');
-      setErrorCode(err.code || null);
+      if (err.status === 429 || err.code === 'ANALYZE_GLOBAL_LIMIT') {
+        setErrorCode(null);
+      } else {
+        setErrorCode(err.code || null);
+      }
     } finally {
       setIsLoading(false);
     }
