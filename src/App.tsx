@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { UploadSection } from './components/UploadSection';
 import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
+import { LibrarySheet } from './components/LibrarySheet';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from './types';
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
@@ -34,6 +35,7 @@ export function App() {
   const [demoLang, setDemoLang] = useState<'zh' | 'fr'>('zh');
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentPage, setCurrentPage] = useState<LessonPage | null>(null);
@@ -391,6 +393,19 @@ export function App() {
     }
   };
 
+  // 머리글의 「내 서재」: 휴대폰(768px 미만)은 아래에서 올라오는 시트, 넓은 화면은 사이드바의 서재 칸으로 이동
+  const handleOpenLibrary = () => {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setIsLibraryOpen(true);
+      return;
+    }
+    const section = document.getElementById('library-section');
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      (section.querySelector<HTMLElement>('button:not([disabled])') || section).focus({ preventScroll: true });
+    }
+  };
+
   const handleRunDemo = async () => {
     setIsLoading(true);
     setLoadingMessage('데모 페이지를 로드하는 중입니다...');
@@ -548,7 +563,7 @@ export function App() {
 
   return (
     <div className="mx-auto max-w-5xl px-3 sm:px-4 py-6 sm:py-8">
-      <Header build={status.build} />
+      <Header build={status.build} onOpenLibrary={handleOpenLibrary} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         {/* Sidebar */}
@@ -562,6 +577,22 @@ export function App() {
           selectedKey={selectedKey}
           onSelectKey={setSelectedKey}
           onOpenSelected={() => selectedKey && loadLesson(selectedKey)}
+          onDeleteLesson={handleDeleteLesson}
+          isLoading={isLoading}
+        />
+
+        <LibrarySheet
+          open={isLibraryOpen}
+          onClose={() => setIsLibraryOpen(false)}
+          library={library}
+          selectedKey={selectedKey}
+          onSelectKey={setSelectedKey}
+          onOpenSelected={() => {
+            if (selectedKey) {
+              loadLesson(selectedKey);
+              setIsLibraryOpen(false);
+            }
+          }}
           onDeleteLesson={handleDeleteLesson}
           isLoading={isLoading}
         />
