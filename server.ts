@@ -994,6 +994,7 @@ function pickEventProps(raw: unknown): Record<string, unknown> {
   if (typeof p.src === 'string' && /^[a-z0-9_-]{1,24}$/.test(p.src)) out.src = p.src;
   if (typeof p.internal === 'boolean') out.internal = p.internal;
   if (typeof p.rate === 'number' && [1, 0.75, 0.5].includes(p.rate)) out.rate = p.rate;
+  if (typeof p.is_demo === 'boolean') out.is_demo = p.is_demo;
   if (p.mode === 'card' || p.mode === 'relay') out.mode = p.mode;
   if (p.voice === 'ai' || p.voice === 'browser') out.voice = p.voice;
   if (typeof p.lang === 'string' && /^[a-z-]{1,10}$/.test(p.lang)) out.lang = p.lang;

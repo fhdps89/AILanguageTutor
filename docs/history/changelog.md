@@ -19,6 +19,21 @@
 
 ---
 
+## [2026-10-10 KST] 문장 재생 시작과 「문장 완료」 기록 (지시문 B3 v2)
+- **배경:** 핵심 숫자는 "자기 책 문장을 끝까지 들었는가"인데 화면이 기록을 보내지 않았다. 기존 `onEnd`는 오류·한도로 끝나도 불려서 그대로 세면 실패가 완료로 잡힌다.
+- **변경:**
+  - `src/utils/audio.ts`: `playSentenceAudio`에 `onComplete({ voice })`를 추가. 정상 재생이 끝까지 간 두 곳(Gemini 음성 `audio.onended`는 `voice:'ai'`, 브라우저 음성 `utterance.onend`는 `voice:'browser'`)에서만 부른다. 정지, 오류, 한도(429) 경로와 기존 `onEnd`·`onError` 순서는 그대로.
+  - `src/utils/analytics.ts`: `trackSentence`(언어 코드 소문자, 예시 수업은 `is_demo=true`이고 `lesson_key`는 안 보냄, 실패해도 화면 변화 없음).
+  - `server.ts`: `pickEventProps`에 `is_demo`(boolean) 한 줄 추가. 허용 이벤트 이름과 다른 필터는 그대로.
+  - `SentenceCard.tsx`(`handlePlayRate`)와 `FullPagePlayer.tsx`(`playNextSentenceInQueue`): 소리가 시작될 때 `sentence_play_start`, 정상 종료 때 `sentence_complete`. 카드는 `mode=card`, 연속 듣기는 `mode=relay`. 도중에 브라우저 음성으로 바뀌어 `onStart`가 두 번 불려도 시작 기록은 한 번. 「끊어 읽기」 칩과 어휘 듣기는 기록하지 않는다.
+  - `docs/features/analytics.md`, `posthog-guide.md`: 보내는 기록으로 옮기고 `is_demo`를 추가. PostHog IP 저장 끄기를 운영자가 했다고 알려 와 반영(화면 확인은 아님).
+- **"문장 완료" 정의:** 속도와 상관없이 끝까지 자연 종료(계측 설계 v2). 사용자 확정은 대기 중이며 바뀌면 `onComplete` 호출 조건과 문서를 고친다.
+- **그대로:** 재생 속도·음성·고른 속도 이어 가기·카라오케·진행 막대·오류 시 동작·한도 문구, 카드의 「재생 끝」(`hasFinished`) 표시(실패 때도 켜질 수 있다는 점은 알려만 둠), `app_open`, `error_report`, 꼬리표 처리. 새 버튼·문구·패키지 없음.
+- **확인한 것:** 타입 검사 새 오류 없음. 가짜 PostHog 서버와 헤드리스 Chromium(소리는 가짜 파일로 대체)으로 예시 수업에서: 1.0x와 0.75x 끝까지 → 시작·완료 각 1건(`rate` 구분, `voice=ai`, `lang=fr-fr`, `is_demo=true`, `lesson_key` 없음), 재생 중 정지 → 완료 없음, 재생 중 다른 줄 → 앞 문장 완료 없음, 음성 요청이 429 → 시작·완료 모두 없음, 끊어 읽기 칩·어휘 듣기 → 기록 없음, 「연속 듣기」 → 문장마다 `mode=relay` 시작·완료. 서버에 `lesson_key` 16자리와 `is_demo=false`를 직접 보내면 그대로 전달되고 `email` 같은 허용 밖 속성은 버려짐.
+- **확인하지 못한 것:** 실제 폰과 실제 PostHog 화면(내가 올린 수업의 `lesson_key` 포함), 브라우저 기본 음성 경로의 실제 종료, 한도 상수를 낮춘 실서버 한도 확인(429 응답은 가짜로 대체), 비행기 모드.
+
+---
+
 ## [2026-10-09 KST] 문서 최신화 (코드 변경 없음)
 - **배경:** 오늘 PR #1~#15로 화면·신고·사용 기록·저작권 안내가 바뀌었는데, 문서 일부가 옛 모습이거나 빠져 있어 대조해 채웠다.
 - **변경:**
