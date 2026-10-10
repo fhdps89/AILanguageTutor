@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
 import { Play, Square, Volume2, Bookmark, Loader2 } from 'lucide-react';
 import { playSentenceAudio, stopAllAudio, getDeviceId } from '../utils/audio';
+import { trackSentence } from '../utils/analytics';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 
 type Rate = 1.0 | 0.75 | 0.5;
@@ -172,6 +173,8 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     setHasFinished(false);
     setPlaybackTime({ currentTime: 0, duration: 0 });
 
+    // 소리가 중간에 브라우저 음성으로 바뀌어 onStart가 두 번 불려도 시작 기록은 한 번만 보낸다
+    let startTracked = false;
     playSentenceAudio({
       audioUrl: rate === 1.0 ? rawAudioUrl : null,
       text: textToSpeak,
@@ -184,6 +187,16 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       onStart: () => {
         setPreparingMessage(null);
         setActivePlayRate(rate);
+        if (!startTracked) {
+          startTracked = true;
+          trackSentence('sentence_play_start', {
+            rate,
+            mode: 'card',
+            lang: language?.code,
+            lessonKey,
+            sentenceId: sentence.id,
+          });
+        }
       },
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
       onEnd: () => {
@@ -191,6 +204,16 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         setPreparingMessage(null);
         setHasFinished(true);
         setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
+      onComplete: ({ voice }) => {
+        trackSentence('sentence_complete', {
+          rate,
+          mode: 'card',
+          voice,
+          lang: language?.code,
+          lessonKey,
+          sentenceId: sentence.id,
+        });
       },
       onError: () => {
         setActivePlayRate(null);

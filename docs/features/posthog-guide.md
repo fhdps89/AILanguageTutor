@@ -12,7 +12,7 @@
 2. 데이터 지역을 고릅니다. US는 `https://us.i.posthog.com`, EU는 `https://eu.i.posthog.com`이 `POSTHOG_HOST` 값입니다.
 3. 설치 안내가 나오면 건너뜁니다. 서버가 전달하므로 설치할 것이 없습니다.
 4. `https://app.posthog.com/project/settings`에서 Project API key(`phc_`로 시작)를 찾습니다. 이 값이 `POSTHOG_KEY`입니다.
-5. Settings > Project > General의 「IP data capture configuration」에서 IP를 저장하지 않는 쪽으로 바꾸는 것을 권합니다(우리 코드는 IP를 보내지 않지만 이중 안전장치). 이 설정을 실제로 바꿨는지는 기록에 없습니다.
+5. Settings > Project > General의 「IP data capture configuration」에서 IP를 저장하지 않는 쪽으로 바꾸는 것을 권합니다(우리 코드는 IP를 보내지 않지만 이중 안전장치). 운영자가 2026-10-09에 바꿨다고 알려 왔습니다(화면으로 확인한 것은 아님).
 6. AI Studio 환경 변수(비밀값)에 `POSTHOG_KEY`, `POSTHOG_HOST`를 넣고 다시 배포합니다. 값은 코드·GitHub·채팅에 적지 않습니다.
 7. PostHog의 Activity 화면에서 1~2분 안에 `app_open` 줄이 나타나는지 봅니다.
 
@@ -30,13 +30,13 @@
 
 | # | 숫자 | 만드는 방법 | 필요한 기록 | 지금 가능? |
 | --- | --- | --- | --- | --- |
-| 1 | 주간 활성 사용자 | Trends, Unique users, 주 단위 | `sentence_play_start` | 아니요(B3 뒤). 임시로 `app_open` |
+| 1 | 주간 활성 사용자 | Trends, Unique users, 주 단위 | `sentence_play_start` | 코드는 있음(2026-10-10 반영). 실제 수신 확인 전 |
 | 2 | 신규 vs 재방문 | Retention(시작·돌아온 이벤트 모두 `app_open`, 주 단위) | `app_open` | 네 |
 | 3 | 사용자당 올린 페이지 수 | Trends, `reused`가 false인 `photo_analyzed` | `photo_analyzed` | 네(B2 반영 뒤) |
-| 4 | 주간 완료 문장 중앙값 | HogQL 또는 사용자당 평균 | `sentence_complete` | 아니요(B3 뒤, 정의 재결정 필요) |
+| 4 | 주간 완료 문장 중앙값 | HogQL 또는 사용자당 평균 | `sentence_complete` | 코드는 있음(2026-10-10 반영). 완료 정의는 사용자 확정 대기 |
 | 5 | 페이지당 Gemini 원가 | `cost_usd_est` 합계 ÷ 새 페이지 수 | `gemini_call`, `photo_analyzed` | 네(B2 반영 뒤, 추정치) |
 
-`photo_analyzed`·`photo_analyze_failed`·`limit_blocked`·`gemini_call`은 B2에서 서버가 직접 보냅니다(속성은 `analytics.md`). 위 `sentence_*`도 B3에서 보내기 시작합니다.
+`photo_analyzed`·`photo_analyze_failed`·`limit_blocked`·`gemini_call`은 B2에서 서버가 직접 보냅니다(속성은 `analytics.md`). `sentence_play_start`·`sentence_complete`는 2026-10-10부터 화면이 보냅니다(B3). 예시 수업은 `is_demo`로 구분되니 낯선 사용자 숫자에서는 `is_demo`가 true가 아닌 것만 봅니다.
 
 ## 5. 내 기기·친구·낯선 사용자
 

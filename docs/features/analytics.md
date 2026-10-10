@@ -6,9 +6,12 @@
 
 허용 이름: `app_open`, `sentence_play_start`, `sentence_complete`. 그 밖의 이름은 400.
 
-허용 속성(나머지는 버림): `src`(영문 소문자·숫자·`_-` 24자 이하), `internal`(true/false), `rate`(1, 0.75, 0.5), `mode`(card/relay), `voice`(ai/browser), `lang`, `lesson_key`(16자리 16진수), `sentence_id`.
+허용 속성(나머지는 버림): `src`(영문 소문자·숫자·`_-` 24자 이하), `internal`(true/false), `rate`(1, 0.75, 0.5), `mode`(card/relay), `voice`(ai/browser), `lang`, `lesson_key`(16자리 16진수), `sentence_id`, `is_demo`(true/false).
 
 - `app_open`은 30분에 한 번까지.
+- `sentence_play_start`: 문장 카드(`mode=card`)나 「연속 듣기」(`mode=relay`)에서 소리가 실제로 나기 시작할 때. `sentence_complete`: 그 소리가 끝까지 자연스럽게 끝났을 때만(정지, 줄 접기, 다른 줄로 이동, 오류, 한도(429)로 끝나면 보내지 않음). 속도(`rate`)와 상관없이 센다. 브라우저 기본 음성으로 끝나면 `voice=browser`. 「끊어 읽기」 칩과 어휘 듣기는 기록하지 않는다.
+- 예시 수업(`demo-arc`, `demo-chinese`)은 `is_demo=true`로 보내고 `lesson_key`는 보내지 않는다. 내 수업은 `lesson_key`가 붙는다.
+- `lang`은 소문자(`fr-fr`)로 보낸다.
 - 기기 번호(`x-device-id`)가 없는 요청은 기록하지 않음.
 - 모집 경로 꼬리표는 주소 끝 `?src=blog`처럼 붙이고(처음 값 우선), 내 기기는 `?internal=1`로 표시합니다(`?internal=0`으로 해제). 처리한 뒤 주소창에서 두 값은 지워집니다.
 
@@ -29,7 +32,7 @@
 
 ## 아직 보내지 않는 것 (예정)
 
-- `sentence_play_start`·`sentence_complete`(B3): 서버는 받을 준비가 되어 있지만 화면은 아직 보내지 않는다. "문장 완료"를 속도와 무관한 자연 종료로 셀지(추천) 0.75x만 셀지 결정이 필요하다.
+- "문장 완료"의 속도 조건은 속도와 무관한 자연 종료로 구현했다(계측 설계 v2, 추천안). 사용자 확정을 기다리는 중이며 바뀌면 `onComplete` 호출 조건과 이 문서를 고친다.
 
 ## 수집하지 않는 것
 
