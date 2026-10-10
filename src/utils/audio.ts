@@ -221,6 +221,7 @@ export async function playSentenceAudio({
   onStart,
   onTimeUpdate,
   onEnd,
+  onComplete,
   onError,
 }: {
   audioUrl?: string | null;
@@ -231,6 +232,8 @@ export async function playSentenceAudio({
   onStart?: () => void;
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
+  /** Called only when playback reached its natural end (never on stop, error, or rate limit). */
+  onComplete?: (info: { voice: 'ai' | 'browser' }) => void;
   onError?: (err: any) => void;
 }) {
   stopAllAudio();
@@ -313,6 +316,7 @@ export async function playSentenceAudio({
         }
         onTimeUpdate?.({ currentTime: audio.duration || 0, duration: audio.duration || 1, ratio: 1.0 });
         onEnd?.();
+        onComplete?.({ voice: 'ai' });
       }
     };
 
@@ -347,7 +351,7 @@ export async function playSentenceAudio({
         }
 
         console.warn('Gemini audio playback failed, falling back to Web Speech API', e);
-        speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
+        speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError, onComplete);
       }
     };
 
@@ -365,7 +369,7 @@ export async function playSentenceAudio({
         return;
       }
       console.warn('Audio play error, falling back to Web Speech', err);
-      speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError);
+      speakWebSpeech(cleanText, rate, lang, thisPlayId, onStart, onTimeUpdate, onEnd, onError, onComplete);
     }
   }
 }
@@ -378,7 +382,8 @@ function speakWebSpeech(
   onStart?: () => void,
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void,
   onEnd?: () => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  onComplete?: (info: { voice: 'ai' | 'browser' }) => void
 ) {
   if (playId !== currentPlayId) return;
 
@@ -427,6 +432,7 @@ function speakWebSpeech(
       activeUtterance = null;
       onTimeUpdate?.({ currentTime: text.length, duration: text.length, ratio: 1.0 });
       onEnd?.();
+      onComplete?.({ voice: 'browser' });
     }
   };
 

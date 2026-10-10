@@ -41,6 +41,34 @@ export function track(name: string, props: Record<string, unknown> = {}) {
   }
 }
 
+// 문장 재생 시작/완료 기록. 예시 수업은 is_demo로 구분하고 lesson_key는 보내지 않는다.
+export function trackSentence(
+  name: 'sentence_play_start' | 'sentence_complete',
+  info: {
+    rate: number;
+    mode: 'card' | 'relay';
+    voice?: 'ai' | 'browser';
+    lang?: string;
+    lessonKey?: string | null;
+    sentenceId: string;
+  }
+) {
+  try {
+    const isDemo = info.lessonKey === 'demo-arc' || info.lessonKey === 'demo-chinese';
+    track(name, {
+      rate: info.rate,
+      mode: info.mode,
+      ...(info.voice ? { voice: info.voice } : {}),
+      ...(info.lang ? { lang: info.lang.toLowerCase() } : {}),
+      ...(info.lessonKey && !isDemo ? { lesson_key: info.lessonKey } : {}),
+      sentence_id: info.sentenceId,
+      is_demo: isDemo,
+    });
+  } catch {
+    // 기록 실패는 사용자에게 보이지 않는다
+  }
+}
+
 // 앱이 열릴 때 한 번 실행한다.
 export function initAnalytics() {
   try {
