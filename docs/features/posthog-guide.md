@@ -32,11 +32,11 @@
 | --- | --- | --- | --- | --- |
 | 1 | 주간 활성 사용자 | Trends, Unique users, 주 단위 | `sentence_play_start` | 코드는 있음(2026-10-10 반영). 실제 수신 확인 전 |
 | 2 | 신규 vs 재방문 | Retention(시작·돌아온 이벤트 모두 `app_open`, 주 단위) | `app_open` | 네 |
-| 3 | 사용자당 올린 페이지 수 | Trends, `reused`가 false인 `photo_analyzed` | `photo_analyzed` | 아니요(B2 뒤) |
+| 3 | 사용자당 올린 페이지 수 | Trends, `reused`가 false인 `photo_analyzed` | `photo_analyzed` | 네(B2 반영 뒤) |
 | 4 | 주간 완료 문장 중앙값 | HogQL 또는 사용자당 평균 | `sentence_complete` | 코드는 있음(2026-10-10 반영). 완료 정의는 사용자 확정 대기 |
-| 5 | 페이지당 Gemini 원가 | Trends 합계 ÷ 새 페이지 수 | `gemini_call`, `photo_analyzed` | 아니요(B2 뒤, 단가 필요) |
+| 5 | 페이지당 Gemini 원가 | `cost_usd_est` 합계 ÷ 새 페이지 수 | `gemini_call`, `photo_analyzed` | 네(B2 반영 뒤, 추정치) |
 
-`photo_analyzed`·`photo_analyze_failed`·`limit_blocked`·`gemini_call`은 B2에서 추가할 이름이며 지금은 코드에 없습니다. `sentence_play_start`·`sentence_complete`는 2026-10-10부터 화면이 보냅니다(B3). 예시 수업은 `is_demo`로 구분되니 낯선 사용자 숫자에서는 `is_demo`가 true가 아닌 것만 봅니다.
+`photo_analyzed`·`photo_analyze_failed`·`limit_blocked`·`gemini_call`은 B2에서 서버가 직접 보냅니다(속성은 `analytics.md`). `sentence_play_start`·`sentence_complete`는 2026-10-10부터 화면이 보냅니다(B3). 예시 수업은 `is_demo`로 구분되니 낯선 사용자 숫자에서는 `is_demo`가 true가 아닌 것만 봅니다.
 
 ## 5. 내 기기·친구·낯선 사용자
 
@@ -93,7 +93,7 @@
 
 1. **"문장 완료"의 정의.** 기존 설계는 0.75x로 끝까지 듣는 것만 세지만 새 카드는 1.0x로 시작합니다. 추천: 속도와 상관없이 자연 종료하면 완료로 세고 `rate` 속성으로 나눠 봅니다(0.75x만 세면 정상 사용 대부분이 빠져 숫자가 작아짐). 반대 입장: 쉐도잉(0.75x)이 핵심이면 그 행동만 세는 편이 정확합니다.
 2. **같은 사람이 여러 명으로 잡히는 문제.** 기기 번호를 쿠키로 한 번 더 잡는 보강(B4). 첫 주 숫자를 본 뒤 필요하면 합니다.
-3. **Gemini 단가 4개**(사진 분석 입력·출력, 음성 입력·출력, 100만 토큰당 USD). 모르면 비워 두고 토큰 수만 먼저 기록할 수 있습니다.
+3. ~~Gemini 단가 4개~~ 해결: 2026-10-09 공식 가격표 값을 `server.ts`에 넣었습니다. 2027-01-01부터 2배로 오르므로 그날 표를 고칩니다.
 
 ## 10. 출처
 
