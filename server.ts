@@ -876,33 +876,41 @@ async function generateGeminiSpeech(
         promptStyle = `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation and proper cadence.`;
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash-lite-tts',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: cleanText,
-                speechMetadata: {
-                  style: promptStyle,
+      const ttsModel = 'gemini-3.8-flash-lite-tts';
+      let response: any;
+      try {
+        response = await ai.models.generateContent({
+          model: ttsModel,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: cleanText,
+                  speechMetadata: {
+                    style: promptStyle,
+                  },
                 },
+              ],
+            },
+          ],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: safeVoice },
               },
-            ],
-          },
-        ],
-        config: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: safeVoice },
             },
           },
-        },
-      });
+        });
+      } catch (callErr) {
+        recordGeminiCall({ kind: 'tts', model: ttsModel, deviceId, ok: false });
+        throw callErr;
+      }
 
       const candidate = response.candidates?.[0]?.content?.parts?.[0];
       const base64Audio = candidate?.inlineData?.data;
+      recordGeminiCall({ kind: 'tts', model: ttsModel, deviceId, ok: Boolean(base64Audio), response });
 
       if (base64Audio) {
         let buffer = Buffer.from(base64Audio, 'base64');
@@ -1060,6 +1068,60 @@ function recordReport(entry: {
     fs.appendFileSync(reportPath, line + '\n', 'utf-8');
   } catch (e) {
     console.warn('[Report] failed to save report', e);
+  }
+}
+
+// ==========================================
+// Gemini 호출 기록 (원가 추정)
+// ==========================================
+// 단가: USD / 100만 토큰. 출처 ai.google.dev/gemini-api/docs/pricing (2026-10-09 갱신, 유료 Standard).
+// 2027-01-01부터 모두 2배가 되므로 바꿀 때는 이 표만 고친다.
+// 표에 없는 모델(VISION_MODEL로 바꾼 경우 등)은 cost_usd_est를 null로 기록하고 토큰 수만 남긴다.
+const GEMINI_PRICES_USD_PER_1M: Record<'vision' | 'tts', { models: string[]; input: number; output: number }> = {
+  vision: { models: ['gemini-3.8-flash', 'gemini-3.6-flash'], input: 0.75, output: 3.75 }, // 출력에 생각 토큰 포함
+  tts: { models: ['gemini-3.8-flash-lite-tts'], input: 0.5, output: 6.0 },
+};
+
+function estimateGeminiCostUsd(
+  kind: 'vision' | 'tts',
+  model: string,
+  promptTokens: number | null,
+  outputTokens: number | null
+): number | null {
+  const price = GEMINI_PRICES_USD_PER_1M[kind];
+  if (!price.models.includes(model) || promptTokens === null || outputTokens === null) return null;
+  return (promptTokens / 1e6) * price.input + (outputTokens / 1e6) * price.output;
+}
+
+// Gemini를 실제로 부를 때마다 한 건 보낸다(캐시 재사용에서는 부르지 않는다). 문장·사진 내용은 보내지 않는다.
+function recordGeminiCall(info: {
+  kind: 'vision' | 'tts';
+  model: string;
+  deviceId: string;
+  ok: boolean;
+  response?: any;
+}) {
+  try {
+    const usage = info.response?.usageMetadata;
+    const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const promptTokens = num(usage?.promptTokenCount);
+    const candidateTokens = num(usage?.candidatesTokenCount);
+    const thoughtTokens = num(usage?.thoughtsTokenCount);
+    // 생각 토큰은 출력 단가로 청구되므로 출력 토큰에 더한다
+    const outputTokens =
+      candidateTokens === null && thoughtTokens === null ? null : (candidateTokens ?? 0) + (thoughtTokens ?? 0);
+    captureEvent('gemini_call', info.deviceId, {
+      kind: info.kind,
+      model: info.model,
+      ok: info.ok,
+      prompt_tokens: promptTokens,
+      output_tokens: outputTokens,
+      thought_tokens: thoughtTokens,
+      total_tokens: num(usage?.totalTokenCount),
+      cost_usd_est: estimateGeminiCostUsd(info.kind, info.model, promptTokens, outputTokens),
+    });
+  } catch (e: any) {
+    console.warn('[Analytics] gemini_call record failed:', e?.message || e);
   }
 }
 
@@ -1265,6 +1327,7 @@ app.post('/api/tts/prepare', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     if (err instanceof RateLimitError) {
+      captureEvent('limit_blocked', deviceId, { code: err.code });
       return res.status(429).json({
         error: err.message,
         code: err.code,
@@ -1299,6 +1362,7 @@ app.get('/api/tts', async (req: Request, res: Response) => {
     res.send(result.buffer);
   } catch (err: any) {
     if (err instanceof RateLimitError) {
+      captureEvent('limit_blocked', deviceId, { code: err.code });
       return res.status(429).json({ error: err.message, code: err.code });
     }
     console.error('Error in /api/tts GET:', err);
@@ -1379,6 +1443,12 @@ app.post(
             result: null,
           }));
 
+          captureEvent('photo_analyzed', callerOwnerId, {
+            lesson_key: cacheKey,
+            lang: cachedData?.language?.code ?? null,
+            n_sentences: Array.isArray(cachedData?.sentences) ? cachedData.sentences.length : null,
+            reused: true,
+          });
           return res.json({
             key: cacheKey,
             page: cachedData,
@@ -1431,6 +1501,7 @@ app.post(
 
     for (const modelCandidate of fallbackModels) {
       let currentFinishReason: string | undefined = undefined;
+      let lastResponse: any = null; // 호출이 끝났으면 토큰 사용량 기록에 쓴다(호출 자체가 던지면 null)
       try {
         console.log(`[OCR] Attempting Google Gemini analysis with model: ${modelCandidate} (${imageMime})`);
         const response = await ai.models.generateContent({
@@ -1451,6 +1522,7 @@ app.post(
             safetySettings: analyzeSafetySettings,
           },
         });
+        lastResponse = response;
 
         const blockReason = (response.promptFeedback as any)?.blockReason;
         currentFinishReason = response.candidates?.[0]?.finishReason;
@@ -1517,6 +1589,7 @@ app.post(
         }
 
         console.log(`[OCR] Successfully analyzed image with model: ${modelCandidate}`);
+        recordGeminiCall({ kind: 'vision', model: modelCandidate, deviceId: callerOwnerId, ok: true, response: lastResponse });
         break;
       } catch (err: any) {
         let code: AnalyzeErrorCode = 'UNKNOWN';
@@ -1540,6 +1613,7 @@ app.post(
         }
 
         console.warn(`[OCR] Model ${modelCandidate} failed with code: ${code}`);
+        recordGeminiCall({ kind: 'vision', model: modelCandidate, deviceId: callerOwnerId, ok: false, response: lastResponse });
         modelAttempts.push({ model: modelCandidate, code });
       }
     }
@@ -1558,6 +1632,7 @@ app.post(
         finalCode = 'MODEL_FAILED';
       }
 
+      captureEvent('photo_analyze_failed', callerOwnerId, { code: finalCode });
       if (finalCode === 'SAFETY_BLOCKED') {
         return res.status(400).json({
           error: '이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요.',
@@ -1589,6 +1664,7 @@ app.post(
       // 사진 속 글이 모델 출력을 거쳐 안내문에 들어가므로 길이와 글자 종류를 제한한다.
       const safeLangName = /^[가-힣A-Za-z ]{1,20}$/.test(rawLangName) ? rawLangName : '';
       const detected = safeLangName ? ` 이 사진은 ${safeLangName} 페이지로 보여요.` : '';
+      captureEvent('photo_analyze_failed', callerOwnerId, { code: 'UNSUPPORTED_LANGUAGE' });
       return res.status(400).json({
         error: `지금은 중국어·프랑스어·영어·일본어 책 페이지만 지원해요.${detected} 지원하는 언어의 페이지로 다시 시도해 주세요.`,
         code: 'UNSUPPORTED_LANGUAGE',
@@ -1619,6 +1695,12 @@ app.post(
       }
     }, 100);
 
+    captureEvent('photo_analyzed', callerOwnerId, {
+      lesson_key: cacheKey,
+      lang: pageData.language?.code ?? null,
+      n_sentences: Array.isArray(pageData.sentences) ? pageData.sentences.length : null,
+      reused: false,
+    });
     res.json({
       key: cacheKey,
       page: pageData,
@@ -1628,6 +1710,7 @@ app.post(
     });
   } catch (err: any) {
     if (err instanceof RateLimitError) {
+      captureEvent('limit_blocked', callerOwnerId, { code: err.code });
       return res.status(429).json({
         error: err.message,
         code: err.code,
@@ -1635,6 +1718,7 @@ app.post(
       });
     }
     if (err?.code === 'SAFETY_BLOCKED' || err?.message === 'SAFETY_BLOCKED') {
+      captureEvent('photo_analyze_failed', callerOwnerId, { code: 'SAFETY_BLOCKED' });
       return res.status(400).json({
         error: '이 페이지는 AI 안전 기준 때문에 분석되지 못했어요. 다른 페이지로 시도해 주세요.',
         code: 'SAFETY_BLOCKED',
@@ -1648,11 +1732,13 @@ app.post(
 
     const errMsg = String(err?.message || '');
     if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('429')) {
+      captureEvent('photo_analyze_failed', callerOwnerId, { code: 'GOOGLE_QUOTA' });
       return res.status(429).json({ error: 'Gemini 모델 일일 호출 한도에 도달했습니다. 잠시 후 또는 내일 다시 시도해 주세요.' });
     }
     if (errMsg.includes('File too large') || errMsg.includes('LIMIT_FILE_SIZE')) {
       return res.status(400).json({ error: '사진 파일 크기가 너무 큽니다. 더 작은 크기의 사진으로 올려주세요.' });
     }
+    captureEvent('photo_analyze_failed', callerOwnerId, { code: 'UNKNOWN' });
     res.status(500).json({ error: '일시적인 오류예요. 잠시 후 다시 시도해 주세요.', code: 'UNKNOWN' });
   }
 });

@@ -6,6 +6,15 @@
 
 ---
 
+## [2026-10-10 KST] B2: 서버가 사진 분석·음성·한도 사용량과 Gemini 원가를 기록
+- **배경:** 페이지당 Gemini 원가, 새 페이지 수, 실패·한도 거절 횟수를 알 방법이 없었다.
+- **변경(`server.ts`만):** `gemini_call`(호출마다 토큰 수와 `cost_usd_est`), `photo_analyzed`(`reused` 포함), `photo_analyze_failed`(`code`만), `limit_blocked`(`code`만)를 PostHog로 보낸다. 단가는 `GEMINI_PRICES_USD_PER_1M` 한 곳. 표에 없는 모델은 원가 null. 이벤트는 서버에서만 나가므로 `/api/event` 허용 목록은 그대로다. PostHog가 안 되거나 느려도 분석·음성 응답은 영향이 없다.
+- **정한 것:** `output_tokens`는 답변 토큰에 생각 토큰을 더한 값(생각 토큰도 출력 단가로 청구되므로), `thought_tokens`는 따로 남김. `UNSUPPORTED_LANGUAGE`도 `photo_analyze_failed`로 기록. 음성 `ok`는 오디오가 실제로 왔는지.
+- **주의:** 단가는 2027-01-01부터 2배. `cost_usd_est`는 추정이며 월 1회 Gemini 청구서와 대조한다.
+- **확인한 것:** 타입 검사 통과. 모의 Gemini·모의 PostHog 서버로: 새 사진 → vision 1건(1000/500+200 토큰 → 0.003375 USD, 손계산 일치)+음성 3건(0.00182), 같은 사진 → `reused:true`만, 같은 문장 음성 재요청 → 기록 없음, 주 모델 실패 → 대체 모델 2건(`ok:false`→`true`), RECITATION → `photo_analyze_failed`, 음성 실패 → `ok:false`, 한도 → `limit_blocked`, 모르는 모델 → null, PostHog 연결 불가에서도 분석·음성 200. 실제 Gemini·실제 PostHog는 아직 확인 못 함.
+
+---
+
 ## [2026-10-09 KST] 서재 개수 제한 없애기, 같은 사진을 올린 사람도 자기 서재에 남게
 - **배경:** `library.json`은 모든 사용자의 서재 항목을 한 파일에 담는데, `/api/analyze`가 `slice(0, 50)`으로 서버 전체 50개만 남겨 누군가의 51번째 수업이 다른 사람의 가장 오래된 수업을 서재에서 지웠다. 또 같은 사진(같은 교재 키)을 두 번째 사람이 올리면 캐시 재사용 분기가 서재 항목을 만들지 않아, 그 사람 서재에 수업이 안 보이고 `/api/lesson/:key`도 403이었다.
 - **변경:**
