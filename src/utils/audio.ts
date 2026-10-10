@@ -26,6 +26,34 @@ export function getDeviceId(): string {
   }
 }
 
+// 서버가 쿠키에 보관한 기기 번호로 맞춘다. 사파리가 오래 안 온 사이트의 저장소를 지워도 같은 기기로 남는다.
+// 2초 안에 응답이 없거나 실패하면 아무것도 바꾸지 않고 넘어간다.
+export async function syncDeviceId(): Promise<void> {
+  try {
+    const current = getDeviceId();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    try {
+      const res = await fetch('/api/device/sync', {
+        method: 'POST',
+        headers: { 'x-device-id': current },
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const synced = data?.deviceId;
+      if (typeof synced === 'string' && /^dev_[a-z0-9]{1,36}$/.test(synced) && synced !== current) {
+        localStorage.setItem('ai_tutor_device_id', synced);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    // 서버가 없거나 저장소를 못 쓰는 환경이면 지금 번호를 그대로 쓴다
+  }
+}
+
 function getSharedAudio(): HTMLAudioElement {
   if (typeof window === 'undefined') {
     return {} as HTMLAudioElement;

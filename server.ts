@@ -1024,6 +1024,58 @@ app.post('/api/event', (req: Request, res: Response) => {
   return res.status(204).end();
 });
 
+// 기기 번호 쿠키 보강: 브라우저 저장소(localStorage)가 지워져도 같은 기기 번호로 되돌린다.
+// 쿠키는 서버가 응답 헤더로만 심고(HttpOnly), 내용은 기기 번호 하나뿐이다.
+const DEVICE_COOKIE = 'ai_tutor_did';
+const DEVICE_COOKIE_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000; // 400일
+const DEVICE_ID_PATTERN = /^dev_[a-z0-9]{1,36}$/;
+
+function validDeviceId(value: unknown): string | null {
+  return typeof value === 'string' && DEVICE_ID_PATTERN.test(value) ? value : null;
+}
+
+function readCookie(req: Request, name: string): string | null {
+  const header = req.headers.cookie;
+  if (typeof header !== 'string') return null;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+function setDeviceCookie(req: Request, res: Response, deviceId: string) {
+  res.cookie(DEVICE_COOKIE, deviceId, {
+    maxAge: DEVICE_COOKIE_MAX_AGE_MS,
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    secure: req.secure, // 배포 환경(https, trust proxy)에서만 켜짐
+  });
+}
+
+app.post('/api/device/sync', (req: Request, res: Response) => {
+  const browserId = validDeviceId(req.headers['x-device-id']);
+  const cookieId = validDeviceId(readCookie(req, DEVICE_COOKIE));
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (!browserId && !cookieId) {
+    return res.status(400).json({ error: 'invalid device id' });
+  }
+  if (!cookieId) {
+    // 쿠키가 없으면 지금 브라우저 번호를 심는다
+    setDeviceCookie(req, res, browserId as string);
+    return res.json({ deviceId: browserId });
+  }
+  if (cookieId === browserId) {
+    // 같으면 만료만 다시 400일로 늘린다
+    setDeviceCookie(req, res, cookieId);
+    return res.json({ deviceId: cookieId });
+  }
+  // 다르면(저장소가 지워져 새 번호가 생긴 경우) 쿠키 번호로 되돌리고 쿠키는 그대로 둔다
+  return res.json({ deviceId: cookieId });
+});
+
 // 카드 오류 신고: 문장 내용은 받지도 저장하지도 않는다 (교재 키, 문장 번호, 항목만)
 const REPORT_REASONS = new Set(['raw_text', 'translation', 'pronunciation', 'vocabulary', 'other']);
 const REPORT_FILE_MAX_BYTES = 2 * 1024 * 1024;
