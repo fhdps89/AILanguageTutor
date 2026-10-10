@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Pause, Download, Sparkles, ChevronRight } from 'lucide-react';
 import { playSentenceAudio, stopAllAudio } from '../utils/audio';
+import { trackSentence } from '../utils/analytics';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
 import { LanguageInfo, SentenceItem } from '../types';
 
@@ -111,6 +112,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
     const rawAudio = audioFiles[`${sentence.id}.mp3`];
     const textToSpeak = sentence.tts_text || sentence.raw_text;
 
+    let startTracked = false;
     playSentenceAudio({
       audioUrl: rawAudio || null,
       text: textToSpeak,
@@ -119,10 +121,31 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       onStart: () => {
         if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
         setIsPlaying(true);
+        if (!startTracked) {
+          startTracked = true;
+          trackSentence('sentence_play_start', {
+            rate: speed,
+            mode: 'relay',
+            lang: language?.code,
+            lessonKey,
+            sentenceId: sentence.id,
+          });
+        }
       },
       onTimeUpdate: ({ currentTime, duration }) => {
         if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
         setSentencePlaybackTime({ currentTime, duration });
+      },
+      onComplete: ({ voice }) => {
+        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
+        trackSentence('sentence_complete', {
+          rate: speed,
+          mode: 'relay',
+          voice,
+          lang: language?.code,
+          lessonKey,
+          sentenceId: sentence.id,
+        });
       },
       onEnd: () => {
         if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
