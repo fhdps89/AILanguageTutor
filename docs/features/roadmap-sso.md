@@ -1,6 +1,6 @@
-# 🚀 [차기 과제 기획] Google SSO 계정 연동 및 클라우드 영구 동기화
+# 🚀 [조건부 과제 기획] Google SSO 계정 연동 및 클라우드 영구 동기화
 
-> **상태:** 차기 스프린트(1~2주 내) 최우선 착수 확정 과제  
+> **상태:** 조건부 과제 (2026-10-11 변경). 낯선 사용자 인터뷰에서 '돌아왔는데 서재가 비었다'가 2건 이상이거나, 재배포 뒤 서재가 사라질 때만 착수  
 > **기준 빌드:** `build 20260930-gemini-single`  
 > **표준 시간대:** KST (한국 표준시)  
 > **연관 문서:** [PROJECT_CONTEXT.md](../../PROJECT_CONTEXT.md), [audio-system.md](../architecture/audio-system.md)

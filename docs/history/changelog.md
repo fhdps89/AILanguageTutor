@@ -1,8 +1,24 @@
 # 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
 
-> **공식 기준 빌드:** `build 20261009-multilingual`  
+> **공식 기준 빌드:** `build 20261012-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)  
 > **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-10-12 KST] PostHog 서버 이벤트 `lang` 소문자 통일
+- **내용:** `server.ts`의 `captureEvent`에서 `props.lang`이 문자열이면 `props.lang.toLowerCase()`로 변환하여 전송. 브라우저 이벤트(`sentence_play_start` 등 `en-us`)와 서버 이벤트(`photo_analyzed` 등 `en-US`)의 언어 표기가 둘로 갈라지지 않도록 소문자로 통일.
+
+---
+
+## [2026-10-11 KST] C6: 로드맵 정렬 및 문서 크기 원칙 변경 (코드 변경 없음)
+- **배경:** 로드맵은 낯선 사용자 시험이 최우선이고 SSO는 조건부인데, `PROJECT_CONTEXT.md` 4절과 `docs/`에서 "SSO 최우선"으로 기재되어 있어 정렬이 필요했다.
+- **변경:**
+  - `PROJECT_CONTEXT.md`: 4절 「차기 최우선 확정 과제」를 「다음 과제」(① 낯선 사용자 시험 ② 모집 전 점검 ③ 조건부 과제)로 교체, 「최근 결정」을 2026-10-11로 갱신, 상단 업데이트 일자 갱신.
+  - `docs/features/roadmap-sso.md`: 제목을 "[조건부 과제 기획]"으로, 상태를 "조건부 과제 (2026-10-11 변경). 낯선 사용자 인터뷰에서 '돌아왔는데 서재가 비었다'가 2건 이상이거나, 재배포 뒤 서재가 사라질 때만 착수"로 변경.
+  - `docs/README.md`: roadmap-sso.md 설명을 "조건부 과제(조건이 될 때만)"로 변경.
+  - **문서 크기 원칙 변경:** 사용자 결정에 따라 루트 문서 크기 원칙을 5KB 미만에서 20KB 미만으로 변경(`PROJECT_CONTEXT.md`, `docs/README.md` 거버넌스 규칙 반영). 과거 기록은 당시 기준이므로 유지.
+- **확인한 것:** `grep -rn "최우선" README.md PROJECT_CONTEXT.md docs/` 결과 0건. `PROJECT_CONTEXT.md` 파일 크기 약 4.8KB(20KB 미만).
 
 ---
 

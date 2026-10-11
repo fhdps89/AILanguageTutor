@@ -123,6 +123,9 @@ function captureEvent(name: string, deviceId: string, props: Record<string, unkn
     if (!apiKey) return;
     const host = (process.env.POSTHOG_HOST || 'https://us.i.posthog.com').replace(/\/+$/, '');
     const info = deviceInfo.get(deviceId);
+    if (typeof props?.lang === 'string') {
+      props = { ...props, lang: props.lang.toLowerCase() };
+    }
     const merged: Record<string, unknown> = { ...props, $geoip_disable: true };
     if (info) {
       if (info.src) merged.src = info.src;

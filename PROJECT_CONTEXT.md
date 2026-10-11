@@ -1,9 +1,9 @@
 # AI 어학 튜터 (AI Language Tutor) — 프로젝트 컨텍스트
 
-> **공식 빌드 버전:** `build 20261009-multilingual`  
-> **최신 업데이트 일자:** 2026-10-09 (KST)  
+> **공식 빌드 버전:** `build 20261012-multilingual`  
+> **최신 업데이트 일자:** 2026-10-12 (KST)  
 > **공식 서비스 URL:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)  
-> **문서 원칙:** 루트 문서 5KB 미만, 기록 일자는 KST
+> **문서 원칙:** 루트 문서 20KB 미만, 기록 일자는 KST
 
 ---
 
@@ -45,20 +45,19 @@
 
 ---
 
-## 🚀 4. 차기 최우선 확정 과제 (Next Sprint Roadmap)
+## 🚀 4. 다음 과제 (Next)
 
-1. **Google SSO 계정 연동 및 클라우드 영구 동기화 (최우선):** 익명 `x-device-id` 서재를 구글 계정으로 병합하고, 계정별 단어장(★, SRS 복습)과 학습 위치 동기화를 둔다.
-2. **학습자 음성 녹음 & A/B 청취 비교:** 마이크 녹음과 AI 음성 교차 청취(점수 없음).
-3. **교재 딥링크 공유:** 특정 교재·문장 위치 URL 공유.
-*(상세 기획서: `docs/features/roadmap-sso.md` 참조)*
+1. **낯선 사용자 시험:** 지인의 지인 3명 → 낯선 사용자 10명과 인터뷰 10건. 목표는 7일 뒤 돌아오는 1명, 주간 활성 3주 연속 증가(PostHog로 판정).
+2. **모집 전 점검:** 재배포 뒤 서재가 남는지, 사파리 8일 뒤 기기 번호가 이어지는지.
+3. **조건부 과제 (조건이 될 때만):** Google SSO·서재 병합(인터뷰에서 "돌아왔는데 서재가 비었다"가 2건 이상일 때), 단어장 SRS, 녹음 비교, 딥링크.
+*(조건부 과제 기획: `docs/features/roadmap-sso.md`)*
 
 ---
 
-## 🧭 최근 결정 (2026-10-09)
+## 🧭 최근 결정 (2026-10-11)
 
-- 지원 언어 중국어 포함, 분석 실패 전용 안내(`RECITATION`, `UNSUPPORTED_LANGUAGE`).
-- 화면 개편(시작 화면·영상·내 수업만 서재·한 줄 카드), 신고 버튼, 저작권 안내, PostHog 사용 기록 창구 완료. 상세는 changelog.
-- 남은 일: 문장 재생·완료 기록(B3, "완료" 정의 결정 필요), Gemini 원가 기록(B2, 단가 필요).
+- 문장 재생·완료 기록(B3, 속도 무관 끝까지 들음), 서버·원가 기록(B2), 기기 번호 쿠키 보강(B4) 완료. 문서 과장 표현 정리(C6).
+- 다음 과제는 기능이 아니라 사용자 숫자. SSO는 조건부로 내림.
 
 ---
 
@@ -67,7 +66,7 @@
 상세 설계, 변경 이력(KST), 트러블슈팅은 배포 격리된 `docs/` 디렉토리에 영구 보존됩니다.
 
 - 🗂️ **[문서 종합 색인 (docs/README.md)](./docs/README.md)**
-- 🚀 **[Google SSO 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
+- 🚀 **[조건부 과제: Google SSO 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
 - 🔊 **[오디오 엔진 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
 - 🧠 **[튜터 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
 - 📜 **[변경 이력 (docs/history/changelog.md)](./docs/history/changelog.md)**

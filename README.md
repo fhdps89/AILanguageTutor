@@ -1,7 +1,7 @@
 # AI 다국어 쉐도잉 튜터 (AI Multilingual Language Tutor)
 
-> **공식 빌드 버전:** `build 20261009-multilingual`  
-> **최신 업데이트 일자:** 2026-10-09 (KST)  
+> **공식 빌드 버전:** `build 20261012-multilingual`  
+> **최신 업데이트 일자:** 2026-10-12 (KST)  
 > **라이브 서비스:** [https://langtutor.ai.studio/](https://langtutor.ai.studio/)
 
 외국어 원서나 교재 사진 한 장으로 언어를 자동 판독하고, **Google Gemini TTS** 기반의 AI 합성 음성으로 문장마다 듣고 따라 읽는 지능형 다국어 쉐도잉 학습 웹 애플리케이션입니다.
@@ -77,7 +77,7 @@ POSTHOG_HOST=
 - 🔊 **[오디오 엔진 (docs/architecture/audio-system.md)](./docs/architecture/audio-system.md)**
 - 🧠 **[튜터 파이프라인 (docs/architecture/tutor-pipeline.md)](./docs/architecture/tutor-pipeline.md)**
 - 🇰🇷 **[한국어 원서 모드(보류) (docs/features/korean-learning-spec.md)](./docs/features/korean-learning-spec.md)**
-- 🚀 **[Google SSO 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
+- 🚀 **[조건부 과제: Google SSO 기획 (docs/features/roadmap-sso.md)](./docs/features/roadmap-sso.md)**
 - 🖥️ **[현재 화면과 동작 (docs/features/screens.md)](./docs/features/screens.md)**
 - 📊 **[사용 기록 (docs/features/analytics.md)](./docs/features/analytics.md)** · **[PostHog 가이드](./docs/features/posthog-guide.md)**
 - ⚖️ **[사진·저작권 안내 근거 (docs/policy/copyright-and-data.md)](./docs/policy/copyright-and-data.md)**

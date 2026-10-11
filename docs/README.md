@@ -1,6 +1,6 @@
 # 📚 AI 다국어 쉐도잉 튜터 — 심층 문서 아카이브 허브 (Docs Hub)
 
-> **공식 기준 빌드:** `build 20261009-multilingual`  
+> **공식 기준 빌드:** `build 20261012-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)
 
 본 디렉토리(`docs/`)는 **AI 다국어 쉐도잉 튜터** 프로젝트의 모든 아키텍처 상세 설계, 기능 명세서, 버전별 변경 이력, 장애 분석 및 트러블슈팅 사례를 보존하는 통합 아카이브 공간입니다.
@@ -39,7 +39,7 @@
 - **[PostHog 가입·사용·운영 가이드 (posthog-guide.md)](./features/posthog-guide.md)**  
   - 가입 순서, 화면 사용법, 매주 월요일 숫자 5개, 꼬리표(`?src=`, `?internal=`), 신고 보기, 점검표
 - **[Google SSO & 클라우드 영구 동기화 로드맵 (roadmap-sso.md)](./features/roadmap-sso.md)**  
-  - 차기 최우선 과제: Google 계정 연동, 익명 서재 자동 병합, 영구 단어장(★), A/B Shadowing Evaluator
+  - 조건부 과제(조건이 될 때만): Google 계정 연동, 익명 서재 자동 병합, 영구 단어장(★), A/B Shadowing Evaluator
 
 ### 3. [변경 이력 (History & Changelog)](./history/)
 - **[KST 기준 버전별 전체 변경 이력 (changelog.md)](./history/changelog.md)**  
@@ -60,7 +60,7 @@
 ---
 
 ## 📐 문서 거버넌스 가이드라인 (Governance Rules)
-1. **루트 문서 최소화:** 루트의 `README.md` 및 `PROJECT_CONTEXT.md`는 반드시 각각 **5KB 미만**을 엄격히 유지합니다.
+1. **루트 문서 최소화:** 루트의 `README.md` 및 `PROJECT_CONTEXT.md`는 반드시 각각 **20KB 미만**을 엄격히 유지합니다.
 2. **KST 날짜 표기 준수:** 모든 변경 이력 및 릴리즈 노트는 한국 표준시(KST, UTC+9) 기준으로 작성합니다.
 3. **상세 문서 docs/ 이관:** 300단어 이상의 기술 사양서, 프롬프트 명세, 트러블슈팅 로그는 `docs/` 하위 적정 디렉토리에 작성합니다.
 4. **배포 안전성:** 신규 문서 작성 시 `.dockerignore`와 `.gcloudignore`의 격리 규칙이 정상 작동하는지 확인합니다.
