@@ -16,7 +16,7 @@
 - **[음성 및 오디오 엔진 설계서 (audio-system.md)](./architecture/audio-system.md)**  
   - Google Gemini Native Speech (`gemini-3.8-flash-lite-tts`, Voice: `Kore`)
   - 무잡음 네이티브 배속 발화 지시 (`speechMetadata.style`: 0.75x, 0.5x)
-  - SHA-256 디스크 캐싱 (`./cache/tts/[hash].wav`) & 3ms 초고속 스트리밍
+  - SHA-256 디스크 캐싱 (`./cache/tts/[hash].wav`) & 캐시 적중 시 즉시 스트리밍
   - iOS Safari 단일 오디오 객체 재사용 및 60fps 가중치 노래방 싱크 엔진
 - **[튜터 파이프라인 및 멀티모달 분석 (tutor-pipeline.md)](./architecture/tutor-pipeline.md)**  
   - Gemini 3.8 Flash Vision OCR 본문 판독 파이프라인

@@ -1,5 +1,7 @@
 # 한국어 텍스트 버전 — 현행 main 기준 코멘트 및 리뷰 아카이브
 
+> 보류: 현재 사진 분석 지원 언어 목록에 없음. 코드는 남아 있으나 화면에서 쓰지 않음.
+
 > **기준:** `main` @ `b92342cb` (2026-09-29 06:36 UTC)  
 > **직전 제품 커밋:** `acdd3e79` — 프록시/레이트리밋, Firestore database ID, `KOREAN_LEARNING_SPEC.md` 추가  
 > **대상 기획:** [korean-learning-spec.md](./korean-learning-spec.md)  
