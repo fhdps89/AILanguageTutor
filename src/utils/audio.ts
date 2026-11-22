@@ -4,6 +4,7 @@
  */
 
 import { DEFAULT_TTS_VOICE, resolveAudioUrl } from './audioCache';
+import { AudioChannel, audioCoordinator } from './audioCoordinator';
 
 // Global reusable audio element to satisfy iOS Safari autoplay / sequential playback restrictions
 let sharedAudio: HTMLAudioElement | null = null;
@@ -11,6 +12,12 @@ let activeUtterance: SpeechSynthesisUtterance | null = null;
 let practiceTimer: any = null;
 let activeRafId: number | null = null;
 let currentPlayId = 0;
+
+let activeEngine: 'html5' | 'webspeech' | null = null;
+let pausedPlayId: number | null = null;
+let activeClaim: { channel: AudioChannel; ownerId: string } | null = null;
+let unregisterActiveClaim: (() => void) | null = null;
+let activeOnPreempt: (() => void) | null = null;
 
 export function getDeviceId(): string {
   try {
@@ -65,8 +72,10 @@ function getSharedAudio(): HTMLAudioElement {
   return sharedAudio;
 }
 
-export function stopAllAudio() {
+function stopMediaOnly() {
   currentPlayId++;
+  activeEngine = null;
+  pausedPlayId = null;
   if (activeRafId) {
     cancelAnimationFrame(activeRafId);
     activeRafId = null;
@@ -81,16 +90,117 @@ export function stopAllAudio() {
     sharedAudio.onended = null;
     sharedAudio.onerror = null;
   }
+  if (activeUtterance) {
+    activeUtterance.onstart = null;
+    activeUtterance.onboundary = null;
+    activeUtterance.onend = null;
+    activeUtterance.onerror = null;
+    activeUtterance = null;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();
     } catch {}
-    activeUtterance = null;
   }
   if (practiceTimer) {
     clearTimeout(practiceTimer);
     practiceTimer = null;
   }
+}
+
+function releaseActiveRegistration() {
+  const claim = activeClaim;
+  const unreg = unregisterActiveClaim;
+  activeClaim = null;
+  unregisterActiveClaim = null;
+  activeOnPreempt = null;
+  if (unreg) {
+    unreg();
+  } else if (claim) {
+    audioCoordinator.release(claim.channel, claim.ownerId);
+  }
+}
+
+export function stopAllAudio() {
+  const prevPreempt = activeOnPreempt;
+  stopMediaOnly();
+  releaseActiveRegistration();
+  if (prevPreempt) {
+    try {
+      prevPreempt();
+    } catch {}
+  }
+}
+
+/**
+ * Pause currently playing shared audio while keeping playId intact.
+ * Returns true if active playback (HTML5 or Web Speech) was paused.
+ */
+export function pauseActiveAudio(): boolean {
+  if (activeRafId) {
+    cancelAnimationFrame(activeRafId);
+    activeRafId = null;
+  }
+
+  if (activeEngine === 'html5' && sharedAudio && !sharedAudio.paused && !sharedAudio.ended) {
+    try {
+      sharedAudio.pause();
+      pausedPlayId = currentPlayId;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (activeEngine === 'webspeech') {
+    if (activeUtterance) {
+      activeUtterance.onstart = null;
+      activeUtterance.onboundary = null;
+      activeUtterance.onend = null;
+      activeUtterance.onerror = null;
+      activeUtterance = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    pausedPlayId = currentPlayId;
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Resume paused shared audio. Returns false if Web Speech was active (caller restarts sentence)
+ * or if the paused playback is no longer valid.
+ */
+export async function resumeActiveAudio(): Promise<boolean> {
+  if (activeEngine === 'webspeech') {
+    activeEngine = null;
+    pausedPlayId = null;
+    return false;
+  }
+
+  if (
+    activeEngine === 'html5' &&
+    pausedPlayId === currentPlayId &&
+    sharedAudio &&
+    sharedAudio.src &&
+    !sharedAudio.ended
+  ) {
+    pausedPlayId = null;
+    try {
+      await sharedAudio.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  pausedPlayId = null;
+  return false;
 }
 
 /**
@@ -102,27 +212,43 @@ export async function playSentenceAudio({
   text,
   lang = 'en-US',
   rate = 1.0,
+  channel = 'tts',
+  ownerId,
   onPreparing,
   onStart,
   onTimeUpdate,
   onEnd,
   onComplete,
   onError,
+  onPreempt,
 }: {
   audioUrl?: string | null;
   text: string;
   lang?: string;
   rate?: number;
+  channel?: AudioChannel;
+  ownerId?: string;
   onPreparing?: (message: string) => void;
   onStart?: () => void;
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void;
   onEnd?: () => void;
   /** Called only when playback reached its natural end (never on stop, error, or rate limit). */
-  onComplete?: (info: { voice: 'ai' | 'browser' }) => void;
+  onComplete?: (info: { voice: 'ai' | 'browser'; durationSec?: number }) => void;
   onError?: (err: any) => void;
+  onPreempt?: () => void;
 }) {
-  stopAllAudio();
-  const thisPlayId = currentPlayId;
+  // Clean up any prior playback without firing a stale preempt handler into the new one unless needed
+  const prevPreempt = activeOnPreempt;
+  const prevClaim = activeClaim;
+  stopMediaOnly();
+  releaseActiveRegistration();
+
+  const resolvedOwnerId = ownerId || `${channel}-player`;
+  if (prevPreempt && (!prevClaim || prevClaim.ownerId !== resolvedOwnerId || prevClaim.channel !== channel)) {
+    try {
+      prevPreempt();
+    } catch {}
+  }
 
   const cleanText = (text || '').trim();
   if (!cleanText) {
@@ -130,6 +256,23 @@ export async function playSentenceAudio({
     return;
   }
 
+  activeOnPreempt = onPreempt ?? null;
+  activeClaim = { channel, ownerId: resolvedOwnerId };
+  unregisterActiveClaim = audioCoordinator.register(channel, resolvedOwnerId, () => {
+    const cb = activeOnPreempt;
+    stopMediaOnly();
+    activeClaim = null;
+    unregisterActiveClaim = null;
+    activeOnPreempt = null;
+    if (cb) {
+      try {
+        cb();
+      } catch {}
+    }
+  });
+  audioCoordinator.claim(channel, resolvedOwnerId);
+
+  const thisPlayId = currentPlayId;
   let targetAudioUrl: string;
 
   try {
@@ -147,13 +290,14 @@ export async function playSentenceAudio({
         cancelAnimationFrame(activeRafId);
         activeRafId = null;
       }
+      releaseActiveRegistration();
       onError?.(err);
       onEnd?.();
     }
     return;
   }
 
-  // If user triggered another sound while we were resolving URL, abort
+  // If user triggered another sound or preempted while we were resolving URL, abort
   if (thisPlayId !== currentPlayId) {
     return;
   }
@@ -194,6 +338,8 @@ export async function playSentenceAudio({
 
     audio.onplay = () => {
       if (thisPlayId === currentPlayId) {
+        activeEngine = 'html5';
+        pausedPlayId = null;
         applyPlaybackRate();
         onStart?.();
         startProgressLoop();
@@ -215,9 +361,14 @@ export async function playSentenceAudio({
           cancelAnimationFrame(activeRafId);
           activeRafId = null;
         }
+        activeEngine = null;
+        pausedPlayId = null;
+        const rawDuration = audio.duration;
+        const durationSec = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : undefined;
+        releaseActiveRegistration();
         onTimeUpdate?.({ currentTime: audio.duration || 0, duration: audio.duration || 1, ratio: 1.0 });
         onEnd?.();
-        onComplete?.({ voice: 'ai' });
+        onComplete?.({ voice: 'ai', durationSec });
       }
     };
 
@@ -227,6 +378,8 @@ export async function playSentenceAudio({
           cancelAnimationFrame(activeRafId);
           activeRafId = null;
         }
+        activeEngine = null;
+        pausedPlayId = null;
 
         // If fallback query returned 429, don't secretly fall back to Web Speech
         if (targetAudioUrl.includes('/api/tts?')) {
@@ -244,6 +397,7 @@ export async function playSentenceAudio({
                   detail: { message: msg, code: probeData.code || 'TTS_DEVICE_LIMIT' },
                 })
               );
+              releaseActiveRegistration();
               onError?.(new Error(msg));
               onEnd?.();
               return;
@@ -265,7 +419,10 @@ export async function playSentenceAudio({
         cancelAnimationFrame(activeRafId);
         activeRafId = null;
       }
+      activeEngine = null;
+      pausedPlayId = null;
       if (err?.isRateLimit) {
+        releaseActiveRegistration();
         onError?.(err);
         onEnd?.();
         return;
@@ -285,11 +442,12 @@ function speakWebSpeech(
   onTimeUpdate?: (progress: { currentTime: number; duration: number; ratio: number }) => void,
   onEnd?: () => void,
   onError?: (err: any) => void,
-  onComplete?: (info: { voice: 'ai' | 'browser' }) => void
+  onComplete?: (info: { voice: 'ai' | 'browser'; durationSec?: number }) => void
 ) {
   if (playId !== currentPlayId) return;
 
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    releaseActiveRegistration();
     onError?.(new Error('Speech synthesis not supported in this browser'));
     onEnd?.();
     return;
@@ -313,9 +471,14 @@ function speakWebSpeech(
     utterance.voice = matchedVoice;
   }
 
+  let wallStartMs = Date.now();
+
   utterance.onstart = () => {
     if (playId === currentPlayId) {
       activeUtterance = utterance;
+      activeEngine = 'webspeech';
+      pausedPlayId = null;
+      wallStartMs = Date.now();
       onStart?.();
       onTimeUpdate?.({ currentTime: 0, duration: 1, ratio: 0 });
     }
@@ -332,15 +495,22 @@ function speakWebSpeech(
   utterance.onend = () => {
     if (playId === currentPlayId) {
       activeUtterance = null;
+      activeEngine = null;
+      pausedPlayId = null;
+      const durationSec = Math.max(0, (Date.now() - wallStartMs) / 1000);
+      releaseActiveRegistration();
       onTimeUpdate?.({ currentTime: text.length, duration: text.length, ratio: 1.0 });
       onEnd?.();
-      onComplete?.({ voice: 'browser' });
+      onComplete?.({ voice: 'browser', durationSec });
     }
   };
 
   utterance.onerror = (err) => {
     if (playId === currentPlayId) {
       activeUtterance = null;
+      activeEngine = null;
+      pausedPlayId = null;
+      releaseActiveRegistration();
       onError?.(err);
       onEnd?.();
     }

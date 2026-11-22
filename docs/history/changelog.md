@@ -6,6 +6,23 @@
 
 ---
 
+## [2026-11-22 KST] UX 리뷰 P2 쉐도잉 훈련 고도화 (PR B: 코디네이터, 쉐도잉 스케줄러, 로컬 녹음기, 블라인드 모드, 구문 컬러 칩)
+- **배경:** P0/P1(PR A) 정비를 마친 뒤, 5-1~5-4 쉐도잉 훈련 UX(오디오 채널 충돌 방지, 문장별 따라 말하기 침묵 구간, 로컬 발음 녹음·비교, 블라인드 학습, 구문 컬러 칩)를 구현했다.
+- **작업 모델 기록:** 설계 `Claude CLI Opus 5.5 high` / 구현 `agy gemini-4-hydrogen-high`
+- **변경:**
+  - **AudioCoordinator (`src/utils/audioCoordinator.ts`, `src/utils/audio.ts`):** `tts` · `relay` · `recording` · `self_playback` 채널 간 상호 선점(`createAudioCoordinator`, 싱글턴 `audioCoordinator`, `register`/`claim`/`release`/`active`)을 도입하고 `playSentenceAudio`가 시작 시 채널(기본 `tts`, `FullPagePlayer`는 `relay`)을 점유하고 정지·선점 시 해제하도록 연결했다. `pauseActiveAudio()`(공유 엘리먼트 일시정지, `playId` 유지) 및 `resumeActiveAudio()`(Web Speech는 `false` 반환해 문장 재시작)를 추가했다.
+  - **쉐도잉 침묵 스케줄러 (`src/utils/shadowingScheduler.ts`, `src/components/FullPagePlayer.tsx`):** `calculateShadowingPauseMs(durationSec, playbackRate) = Math.max(2000, Math.round((durationSec / rate) * 1000 * 1.2))`(`0.5` 하한 미적용), `decideLoop`, `getSupportedRecorderMimeType`, `formatSeconds`, 순수 `schedulerReducer`(`idle`/`playing_tts`/`short_gap`/`shadowing_pause`/`paused`)를 구현했다. 일시정지/재개 시 `remainingMs` 보존, `document.hidden` 자동 일시정지(자동 재개 없음), `[바로 넘기기]` 즉시 완료, 반복 `[1회]`/`[3회]`/`[∞]`, 인플로우 2단 바, AI 음원은 미디어 길이+배속·Web Speech 폴백은 벽시계 시간+`effectiveRate=1` 적용, `onComplete`/`onError`에서만 전이하며 PostHog `mode: 'relay'` 이벤트를 유지했다.
+  - **로컬 쉐도잉 녹음기 (`src/components/ShadowingRecorder.tsx`, `src/utils/shadowingRecorderMachine.ts`):** 문장 카드 속도 바 바로 아래 1줄 도크를 추가했다. `idle`/`requesting_permission`/`recording`(빨간 중지 버튼+레벨 바 6칸+30초 자동 정지)/`permission_denied`(인라인 경고)/`ready`(`[원어 듣기]`·`[내 발음 듣기]`·`[A→B 연속 비교]`·`[다시 녹음]`)/`cleanup` 상태를 지원하며, 녹음물은 브라우저 로컬 Blob(`URL.createObjectURL`)으로만 유지되고 서버 업로드/네트워크 전송이 전혀 없다. 녹음 시작 시 코디네이터가 TTS·릴레이를 즉시 선점·중지하며, `[원어 듣기]`는 PR A에서 도입한 1.0x 캐시 음원과 현재 `preferredRate`를 재사용해 추가 TTS 쿼터를 소모하지 않는다. 언마운트/재녹음 시 `URL.revokeObjectURL` 및 미디어 트랙 정리를 수행한다.
+  - **블라인드 모드 & 구문 컬러 칩 (`src/App.tsx`, `src/components/SentenceCard.tsx`, `src/utils/syntaxTokens.ts`, `demo_chinese.json`, `demo_page.json`):** 학습 도구 바(`[원문 숨기기]`·`[발음 힌트 숨기기]`·`[해석 숨기기]`)를 추가해 레이아웃 높이를 유지한 채 가리고 탭하면 임시로 확인할 수 있게 했다. `parseSyntaxDiagram`으로 구문도를 역할별 색상 칩(주어=파랑, 술어=초록, 목적어=보라, 수식어=주황, 연결/기타=회색)으로 줄바꿈 렌더링(말줄임 `…` 없음, 라벨 2개 미만 시 원문 줄바꿈 폴백)하고, `demo_chinese.json` `s01`·`demo_page.json` `s01`/`s04`/`s05` 구문도의 말줄임 생략을 전체 문장으로 보완했다.
+  - **단위 테스트 추가 (`node:test` + `tsx`):** `tests/shadowingTiming.test.ts`, `tests/audioCoordinator.test.ts`, `tests/syntaxTokens.test.ts`, `tests/shadowingRecorderMachine.test.ts` 추가.
+- **참고 및 주의:**
+  - 녹음 데이터는 기기 메모리(로컬 Blob)에만 임시 보관되며 서버로 업로드되지 않는다.
+  - 침묵 공식 `Math.max(2000, Math.round((durationSec / rate) * 1000 * 1.2))`에서 `0.5` 속도 하한을 두지 않는다.
+  - `0.5x` 재생은 PR A와 동일하게 1.0x 캐시 음원에 클라이언트 `playbackRate`를 적용하는 방식을 계속 사용한다.
+- **확인한 것:** `npm test`, `npm run lint`, `npm run build` 통과.
+
+---
+
 ## [2026-11-22 KST] UX 리뷰 P0/P1 수정 (PR A: 레이아웃 오버플로, TTS 캐시/쿼터 Option A, 프롬프트 누수·스키마, 책별 북마크)
 - **배경:** 실사용 리뷰에서 긴 프랑스어 문장/구문도의 가로 넘침(P0), 배속 변경 시 `/api/tts/prepare` 재요청으로 인한 TTS 쿼터 이중 차감(P0), 번역문 내 프롬프트 지침 누수 및 제목 끊어 읽기 부재(P1), 다른 책의 북마크 배너 노출·포스터 미표시·카피 과장(P1)이 확인되어 PR A 범위에서 우선 수정했다. (P2 쉐도잉 녹음·스케줄러·블라인드 모드·구문 컬러 칩은 PR B로 분리)
 - **변경:**

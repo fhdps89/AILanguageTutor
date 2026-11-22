@@ -1,11 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SentenceItem, LanguageInfo } from '../types';
-import { Play, Square, Volume2, Bookmark, Loader2 } from 'lucide-react';
+import { Play, Square, Volume2, Bookmark, Loader2, Eye } from 'lucide-react';
 import { playSentenceAudio, stopAllAudio, getDeviceId } from '../utils/audio';
 import { trackSentence } from '../utils/analytics';
 import { buildKaraokeTimeline, getSpanStatus } from '../utils/karaokeSync';
+import { parseSyntaxDiagram, getSyntaxRoleStyle } from '../utils/syntaxTokens';
+import { ShadowingRecorder } from './ShadowingRecorder';
 
 type Rate = 1.0 | 0.75 | 0.5;
+
+export interface BlindModeState {
+  text: boolean;
+  pronunciation: boolean;
+  translation: boolean;
+}
 
 interface SentenceCardProps {
   sentence: SentenceItem;
@@ -20,6 +28,7 @@ interface SentenceCardProps {
   preferredRate: Rate;
   onRateChange: (rate: Rate) => void;
   lessonKey?: string | null;
+  blindMode?: BlindModeState;
 }
 
 // 오류 신고 항목 (서버 /api/report의 reason 값과 같다)
@@ -91,6 +100,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   preferredRate,
   onRateChange,
   lessonKey,
+  blindMode = { text: false, pronunciation: false, translation: false },
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   // 재생이 한 번 끝까지 간 뒤에만 true (펼친 줄 위쪽 상태 표시용)
@@ -108,6 +118,21 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   // 아래쪽 접이식 항목 (구문 분석도, 핵심 어휘)
   const [showSyntax, setShowSyntax] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
+
+  // 블라인드 모드 임시 보기 상태
+  const [revealed, setRevealed] = useState<{
+    text: boolean;
+    pronunciation: boolean;
+    translation: boolean;
+  }>({ text: false, pronunciation: false, translation: false });
+
+  useEffect(() => {
+    setRevealed((prev) => ({
+      text: blindMode.text ? prev.text : false,
+      pronunciation: blindMode.pronunciation ? prev.pronunciation : false,
+      translation: blindMode.translation ? prev.translation : false,
+    }));
+  }, [blindMode.text, blindMode.pronunciation, blindMode.translation]);
 
   // 오류 신고: idle(버튼) → choosing(항목 고르기) → sending → done(고마워요) / error(다시 눌러 주세요)
   const reportId = lessonKey ? `${lessonKey}/${sentence.id}` : null;
@@ -180,6 +205,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: textToSpeak,
       lang: langParam,
       rate,
+      ownerId: `card-${sentence.id}`,
       onPreparing: (msg) => {
         setActivePlayRate(rate);
         setPreparingMessage(msg);
@@ -220,6 +246,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
       },
+      onPreempt: () => {
+        resetPlayback();
+      },
     });
   };
 
@@ -250,6 +279,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     if (wasExpandedRef.current && !isExpanded) {
       resetPlayback();
       setHasFinished(false);
+      setRevealed({ text: false, pronunciation: false, translation: false });
     }
     wasExpandedRef.current = isExpanded;
   }, [isExpanded]);
@@ -275,6 +305,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: chunkText,
       lang: langParam,
       rate: 1.0,
+      ownerId: `card-${sentence.id}-chunk`,
       onPreparing: (msg) => setPreparingMessage(msg),
       onStart: () => setPreparingMessage(null),
       onTimeUpdate: ({ currentTime, duration }) => setPlaybackTime({ currentTime, duration }),
@@ -287,6 +318,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         setActiveChunk(null);
         setPreparingMessage(null);
         setPlaybackTime({ currentTime: 0, duration: 0 });
+      },
+      onPreempt: () => {
+        resetPlayback();
       },
     });
   };
@@ -309,6 +343,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       text: wordText,
       lang: langParam,
       rate: 1.0,
+      ownerId: `card-${sentence.id}-vocab`,
       onPreparing: (msg) => setPreparingMessage(msg),
       onStart: () => setPreparingMessage(null),
       onEnd: () => {
@@ -318,6 +353,9 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       onError: () => {
         setActiveVocab(null);
         setPreparingMessage(null);
+      },
+      onPreempt: () => {
+        resetPlayback();
       },
     });
   };
@@ -419,8 +457,57 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
   };
 
   const hasVocab = sentence.vocabulary && sentence.vocabulary.length > 0;
-  const hasSyntax = !!sentence.syntax_diagram && !isKoreanMode;
+  const hasSyntax =
+    (Boolean(sentence.syntax_diagram) || Boolean(sentence.syntaxTokens && sentence.syntaxTokens.length > 0)) &&
+    !isKoreanMode;
   const hasVocabPanel = hasVocab || Boolean(pronHint);
+
+  const isTextHidden = blindMode.text && !revealed.text;
+  const isPronHidden = blindMode.pronunciation && !revealed.pronunciation;
+  const isTransHidden = blindMode.translation && !revealed.translation;
+
+  const toggleReveal = (field: keyof BlindModeState) => {
+    setRevealed((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  const renderBlindWrapper = (
+    field: keyof BlindModeState,
+    isCovered: boolean,
+    label: string,
+    children: React.ReactNode
+  ) => {
+    const activeBlind = blindMode[field];
+    if (!activeBlind) {
+      return children;
+    }
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => toggleReveal(field)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleReveal(field);
+          }
+        }}
+        aria-label={isCovered ? `${label} 가려짐 — 눌러서 잠깐 보기` : `${label} 보임 — 눌러서 다시 가리기`}
+        className="relative cursor-pointer rounded-lg transition focus-visible:outline-2"
+      >
+        <div className={isCovered ? 'blur-sm select-none opacity-25 pointer-events-none' : ''}>
+          {children}
+        </div>
+        {isCovered && (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white/95 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs">
+              <Eye className="h-3 w-3 shrink-0 text-indigo-600" />
+              <span>탭하여 {label} 보기</span>
+            </span>
+          </span>
+        )}
+      </div>
+    );
+  };
 
   if (!isExpanded) {
     return (
@@ -429,7 +516,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           type="button"
           onClick={handleRowTap}
           aria-expanded={false}
-          aria-label={`${index + 1}번 문장 듣기: ${sentence.raw_text}`}
+          aria-label={`${index + 1}번 문장 듣기${blindMode.text ? '' : `: ${sentence.raw_text}`}`}
           className={`flex w-full min-w-0 max-w-full min-h-[60px] items-center gap-3 rounded-xl border px-3 py-2 text-left shadow-sm transition cursor-pointer ${
             isBookmarked
               ? 'bg-amber-50/40 border-amber-400 hover:bg-amber-50'
@@ -440,7 +527,13 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             <Play className="h-5 w-5 fill-current" />
           </span>
           <span className="w-6 shrink-0 text-xs font-bold text-slate-600 tabular-nums">{index + 1}</span>
-          <span className="min-w-0 flex-1 truncate font-serif text-base text-slate-900">{sentence.raw_text}</span>
+          <span
+            className={`min-w-0 flex-1 truncate font-serif text-base text-slate-900 ${
+              blindMode.text ? 'blur-sm select-none opacity-30' : ''
+            }`}
+          >
+            {sentence.raw_text}
+          </span>
           {isBookmarked && (
             <span className="shrink-0 text-sm" aria-label="내일 시작할 문장">
               📍
@@ -536,35 +629,61 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         <span className="mb-1 block text-xs font-bold tracking-wider text-slate-600">
           {language ? `${language.flag} ${language.name_ko}:` : '원문:'}
         </span>
-        <p className="wrap-anywhere text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
-          {renderKaraokeText(
-            sentence.raw_text,
-            isAudioPlaying,
-            playbackTime.currentTime,
-            playbackTime.duration
-          )}
-        </p>
+        {renderBlindWrapper(
+          'text',
+          isTextHidden,
+          '원문',
+          <p className="wrap-anywhere text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
+            {renderKaraokeText(
+              sentence.raw_text,
+              isAudioPlaying,
+              playbackTime.currentTime,
+              playbackTime.duration
+            )}
+          </p>
+        )}
 
         {/* Chinese Pinyin with Tones */}
         {isChineseMode && sentence.pinyin && (
-          <div className="mt-2 flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
-            <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">🇨🇳 한어병음:</span>
-            <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{sentence.pinyin}</span>
+          <div className="mt-2 min-w-0 max-w-full">
+            {renderBlindWrapper(
+              'pronunciation',
+              isPronHidden,
+              '발음 힌트',
+              <div className="flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
+                <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">🇨🇳 한어병음:</span>
+                <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{sentence.pinyin}</span>
+              </div>
+            )}
           </div>
         )}
 
         {isKoreanMode && sentence.sound_romanization && (
-          <div className="mt-2 min-w-0 max-w-full text-sm text-slate-600 font-mono tracking-wide">
-            🗣️ <span className="wrap-anywhere italic text-slate-600">{sentence.sound_romanization}</span>
+          <div className="mt-2 min-w-0 max-w-full">
+            {renderBlindWrapper(
+              'pronunciation',
+              isPronHidden,
+              '발음 힌트',
+              <div className="min-w-0 max-w-full text-sm text-slate-600 font-mono tracking-wide">
+                🗣️ <span className="wrap-anywhere italic text-slate-600">{sentence.sound_romanization}</span>
+              </div>
+            )}
           </div>
         )}
 
         {!isChineseMode && !isKoreanMode && pronHint && (
-          <div className="mt-2 flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
-            <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">
-              {isFrench ? '🗣️ 연음·발음:' : '🗣️ 발음 가이드:'}
-            </span>
-            <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{pronHint}</span>
+          <div className="mt-2 min-w-0 max-w-full">
+            {renderBlindWrapper(
+              'pronunciation',
+              isPronHidden,
+              '발음 힌트',
+              <div className="flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
+                <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">
+                  {isFrench ? '🗣️ 연음·발음:' : '🗣️ 발음 가이드:'}
+                </span>
+                <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{pronHint}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -623,14 +742,28 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
       </div>
 
+      {/* 1-line Shadowing Recorder Dock */}
+      <ShadowingRecorder
+        sentenceId={sentence.id}
+        textToSpeak={textToSpeak}
+        langParam={langParam}
+        rawAudioUrl={rawAudioUrl}
+        preferredRate={preferredRate}
+      />
+
       {/* Translation */}
       <div className="mb-3 min-w-0 max-w-full bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
         <span className="text-xs font-bold tracking-wider text-slate-600 block mb-0.5">
           {isKoreanMode ? '영어 번역 (Translation):' : '한국어 번역:'}
         </span>
-        <p className="wrap-anywhere text-sm text-slate-800 leading-normal font-sans">
-          {sentence.translation}
-        </p>
+        {renderBlindWrapper(
+          'translation',
+          isTransHidden,
+          '해석',
+          <p className="wrap-anywhere text-sm text-slate-800 leading-normal font-sans">
+            {sentence.translation}
+          </p>
+        )}
       </div>
 
       {/* Korean Morphological Chunks or 끊어 읽기 chips */}
@@ -745,17 +878,45 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
         </div>
       )}
 
-      {/* Collapsible Syntax Diagram */}
-      {showSyntax && sentence.syntax_diagram && !isKoreanMode && (
-        <div className="mt-3 min-w-0 max-w-full">
-          <span className="text-sm font-bold text-slate-700 block mb-1">
-            구문 분해 (문장 구조도):
-          </span>
-          <pre className="wrap-pre-anywhere max-w-full overflow-x-auto rounded bg-slate-900 p-3 text-sm font-mono text-emerald-400 leading-relaxed">
-            {sentence.syntax_diagram}
-          </pre>
-        </div>
-      )}
+      {/* Collapsible Syntax Diagram (Color Tokens with wrapping chips, no ellipsis) */}
+      {showSyntax && hasSyntax && (() => {
+        const parsed = parseSyntaxDiagram(sentence.syntax_diagram, sentence.syntaxTokens);
+        return (
+          <div className="mt-3 min-w-0 max-w-full">
+            <span className="text-sm font-bold text-slate-700 block mb-1.5">
+              구문 분해 (문장 구조도):
+            </span>
+            {parsed.isFallback ? (
+              <div className="wrap-pre-anywhere max-w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-mono text-slate-800 leading-relaxed">
+                {parsed.rawText}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                {parsed.tokens.map((tok, idx) => {
+                  const style = getSyntaxRoleStyle(tok.role);
+                  return (
+                    <div
+                      key={idx}
+                      className={`inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm leading-snug ${style.containerClass}`}
+                    >
+                      {tok.labelKo && (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-bold ${style.badgeClass}`}
+                        >
+                          {tok.labelKo}
+                        </span>
+                      )}
+                      <span className="wrap-anywhere min-w-0 font-serif font-medium">
+                        {tok.text}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Collapsible Vocabulary (+ 연음/성조 발음 팁) */}
       {showVocab && hasVocabPanel && (
@@ -829,11 +990,18 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           )}
 
           {pronHint && (
-            <div className="mt-2 flex flex-wrap items-start gap-1 min-w-0 max-w-full text-sm text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
-              <span className="font-bold text-amber-800 shrink-0">
-                {isFrench ? '🗣️ 연음' : isChineseMode ? '🗣️ 성조/발음 팁' : '🗣️ 발음'}:
-              </span>
-              <span className="wrap-anywhere min-w-0 flex-1">{pronHint}</span>
+            <div className="mt-2 min-w-0 max-w-full">
+              {renderBlindWrapper(
+                'pronunciation',
+                isPronHidden,
+                '발음 힌트',
+                <div className="flex flex-wrap items-start gap-1 min-w-0 max-w-full text-sm text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
+                  <span className="font-bold text-amber-800 shrink-0">
+                    {isFrench ? '🗣️ 연음' : isChineseMode ? '🗣️ 성조/발음 팁' : '🗣️ 발음'}:
+                  </span>
+                  <span className="wrap-anywhere min-w-0 flex-1">{pronHint}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
