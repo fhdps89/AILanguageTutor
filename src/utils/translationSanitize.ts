@@ -31,12 +31,18 @@ export function stripPromptLeakage(translation: string): string {
     const hadPeriod = _match.trimEnd().endsWith('.');
     const period = hadPeriod || tail.length === 0 ? '.' : '';
     if (endingChar === '라') {
-      // "이라고 글은 말한다" → "이다." 만 변환. "돌아가리라고 글은 전한다"는 "돌아가리라."로 남긴다.
+      // "이라고 글은 말한다" → "이다."
       const charBefore = offset > 0 ? full[offset - 1] : '';
       if (charBefore === '이') {
         return `다${period}`;
       }
-      return `라${period}`;
+      // "아니라고 글은 전한다" → "아니다."
+      if (offset >= 2 && full.slice(offset - 2, offset) === '아니') {
+        return `다${period}`;
+      }
+      // 명령형(가라)·추측형(가리라)·서술격(의사라)을 형태만으로 구별할 수 없으므로
+      // 비문이 되지 않게 "라고 한다."로 남긴다.
+      return `라고 한다${period || '.'}`;
     }
     return hadPeriod ? '다.' : '다';
   });
