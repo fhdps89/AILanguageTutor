@@ -7,7 +7,7 @@ import { FullPagePlayer } from './components/FullPagePlayer';
 import { SentenceCard } from './components/SentenceCard';
 import { LibrarySheet } from './components/LibrarySheet';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from './types';
-import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon, Camera, Loader2 } from 'lucide-react';
+import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon, Camera, Loader2, Eye, EyeOff } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
 import { normalizeLessonPage } from './utils/lessonSchema';
 import { loadBookmarks, saveBookmark, removeBookmark, getLatestBookmark } from './utils/bookmarks';
@@ -49,6 +49,9 @@ export function App() {
   // 펼쳐진 문장 카드 id (수업을 열면 하나도 펼치지 않음) / 고른 듣기 속도 (다음 문장에도 이어진다)
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [preferredRate, setPreferredRate] = useState<1.0 | 0.75 | 0.5>(1.0);
+  const [blindText, setBlindText] = useState(false);
+  const [blindPronunciation, setBlindPronunciation] = useState(false);
+  const [blindTranslation, setBlindTranslation] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -742,6 +745,56 @@ export function App() {
                 </span>
               </div>
 
+              {/* Learning Toolbar: Blind Mode Toggles */}
+              <div
+                role="toolbar"
+                aria-label="블라인드 학습 도구"
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-2xs"
+              >
+                <span className="text-xs font-bold text-slate-600 mr-1 whitespace-nowrap">
+                  블라인드 모드
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBlindText((v) => !v)}
+                  aria-pressed={blindText}
+                  className={`inline-flex min-h-9 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    blindText
+                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {blindText ? <EyeOff className="h-3.5 w-3.5 shrink-0" /> : <Eye className="h-3.5 w-3.5 shrink-0" />}
+                  <span>원문 숨기기</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBlindPronunciation((v) => !v)}
+                  aria-pressed={blindPronunciation}
+                  className={`inline-flex min-h-9 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    blindPronunciation
+                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {blindPronunciation ? <EyeOff className="h-3.5 w-3.5 shrink-0" /> : <Eye className="h-3.5 w-3.5 shrink-0" />}
+                  <span>발음 힌트 숨기기</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBlindTranslation((v) => !v)}
+                  aria-pressed={blindTranslation}
+                  className={`inline-flex min-h-9 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    blindTranslation
+                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {blindTranslation ? <EyeOff className="h-3.5 w-3.5 shrink-0" /> : <Eye className="h-3.5 w-3.5 shrink-0" />}
+                  <span>해석 숨기기</span>
+                </button>
+              </div>
+
               {/* Uploaded photo with collapsible view for mobile space saving */}
               {photoUrl && (
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white p-3 shadow-xs">
@@ -805,6 +858,11 @@ export function App() {
                       preferredRate={preferredRate}
                       onRateChange={setPreferredRate}
                       lessonKey={currentKey}
+                      blindMode={{
+                        text: blindText,
+                        pronunciation: blindPronunciation,
+                        translation: blindTranslation,
+                      }}
                     />
                   );
                 })}

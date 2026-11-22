@@ -28,7 +28,7 @@
       "tts_text": "Il trône sur la place de l’Étoile, au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline.",
       "translation": "그것은 에투알 광장 위, 언덕 꼭대기의 다이아몬드처럼 열두 갈래 거리가 감싸는 중심에 자리한다:",
       "breath_marks": "Il trône sur la place de l’Étoile, / au centre de douze avenues / qui le sertissent comme un diamant au sommet d’une colline :",
-      "syntax_diagram": "Il trône [장소] sur la place de l’Étoile\n        [부가] au centre de douze avenues\n               qui le sertissent comme un diamant…",
+      "syntax_diagram": "Il [주어] + trône [술어] + sur la place de l’Étoile [장소 수식어] + au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline [부가 수식어]",
       "liaison_hint": "l’‿Étoile · douze‿avenues",
       "pronunciation_hint": "l’‿Étoile · douze‿avenues [두자브뉘] — 끝 자음과 다음 모음의 연음(liaison)에 유의",
       "vocabulary": [
@@ -71,7 +71,7 @@
       "tts_text": "C’est Napoléon Premier, au lendemain de la bataille d’Austerlitz le deux décembre mil huit cent cinq, qui avait déclaré à ses soldats : Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe.",
       "translation": "아우스터리츠 전투 다음날인 1805년 12월 2일, 나폴레옹 1세가 병사들에게 이렇게 말했다. 「너희는 개선문 아래로만 집으로 돌아가리라.」",
       "breath_marks": "C’est Napoléon Ier, / au lendemain de la bataille d’Austerlitz le 2 décembre 1805, / qui avait déclaré à ses soldats : / « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe ».",
-      "syntax_diagram": "C’est [Napoléon Ier] qui avait déclaré …\n인용: ne … que = 오직 ~만\nVous ne rentrerez … que sous des arcs de Triomphe",
+      "syntax_diagram": "C’est [강조 연결] + Napoléon Ier [주어] + qui avait déclaré à ses soldats [술어] + « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe » [목적어: ne … que = 오직 ~만]",
       "liaison_hint": "C’est · dans‿vos",
       "pronunciation_hint": "C’est [세] · des‿arcs [데자르크] — 복수 관사 des와 모음 a 연음 [z]",
       "vocabulary": [
@@ -86,7 +86,7 @@
       "tts_text": "Mais cette bataille triomphale est suivie de défaites, et l’exil de l’empereur en mil huit cent quatorze à l’île d’Elbe, puis sa mort en mil huit cent vingt et un, compliquent durablement les travaux.",
       "translation": "그러나 그 개선의 전투 뒤에 패배가 이어지고, 1814년 엘바 유배와 1821년 황제의 죽음이 공사를 오래 꼬이게 한다.",
       "breath_marks": "Mais cette bataille triomphale est suivie de défaites, / et l’exil de l’empereur en 1814 à l’île d’Elbe, / puis sa mort en 1821, / compliquent durablement les travaux.",
-      "syntax_diagram": "[l’exil … puis sa mort]  →  compliquent  les travaux\n(복수 주어 묶음 + 복수 동사)",
+      "syntax_diagram": "l’exil de l’empereur en 1814 à l’île d’Elbe, puis sa mort en 1821 [복수 주어] + compliquent durablement [술어] + les travaux [목적어]",
       "liaison_hint": "est‿suivie",
       "vocabulary": [
         {"word": "est suivie de", "meaning": "~가 뒤를 잇다", "hint": ""},
