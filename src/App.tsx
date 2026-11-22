@@ -397,17 +397,20 @@ export function App() {
     }, 300);
   };
 
-  const handleClearBookmark = (e: React.MouseEvent) => {
+  const handleClearBookmark = (e: React.MouseEvent, lessonKey = currentKey) => {
     e.stopPropagation();
-    if (!currentKey) return;
-    removeBookmark(currentKey);
+    if (!lessonKey) return;
+    removeBookmark(lessonKey);
     setBookmarksByBook((prev) => {
       const next = { ...prev };
-      delete next[currentKey];
+      delete next[lessonKey];
       return next;
     });
     setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
+
+  // 수업이 열려 있으면 그 책의 북마크만, 랜딩(수업 미선택)에서는 가장 최근 북마크로 이어가기 배너를 보여 준다.
+  const bannerBookmark = currentKey ? currentBookmark : latestBookmark;
 
   // 업로드 칸은 사진을 고른 뒤, 또는 수업이 없는 날 사진 한도를 다 쓴 때만 보인다
   const isPhotoLimitReached = Boolean(quota && quota.analyze.remaining === 0);
@@ -688,8 +691,8 @@ export function App() {
             </div>
           )}
 
-          {/* Bookmark banner (scoped strictly to the currently opened lessonKey) */}
-          {currentKey && currentBookmark && (
+          {/* Bookmark banner: current lesson when open, otherwise the latest bookmark on the landing screen */}
+          {bannerBookmark && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 min-w-0 max-w-full rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 border border-amber-300/80 p-4 shadow-xs">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
@@ -701,27 +704,27 @@ export function App() {
                       📍 내일은 여기서부터 시작
                     </span>
                     <span className="text-xs text-amber-800">
-                      {new Date(currentBookmark.updatedAt).toLocaleDateString()} 저장
+                      {new Date(bannerBookmark.updatedAt).toLocaleDateString()} 저장
                     </span>
                   </div>
                   <p className="text-sm font-medium text-slate-800 mt-0.5 wrap-anywhere">
-                    <span className="font-semibold text-slate-900">{currentBookmark.lessonTitle}</span>
+                    <span className="font-semibold text-slate-900">{bannerBookmark.lessonTitle}</span>
                     <span className="mx-1.5 text-slate-300">·</span>
-                    <span className="font-mono text-indigo-700 font-bold mr-1.5">{currentBookmark.sentenceId}</span>
-                    <span className="text-slate-600 line-clamp-1 italic">"{currentBookmark.sentenceText}"</span>
+                    <span className="font-mono text-indigo-700 font-bold mr-1.5">{bannerBookmark.sentenceId}</span>
+                    <span className="text-slate-600 line-clamp-1 italic">"{bannerBookmark.sentenceText}"</span>
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
                 <button
-                  onClick={() => handleResumeBookmark(currentBookmark)}
+                  onClick={() => handleResumeBookmark(bannerBookmark)}
                   className="flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-700 transition cursor-pointer"
                 >
                   <span>바로 이어하기</span>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                 </button>
                 <button
-                  onClick={handleClearBookmark}
+                  onClick={(e) => handleClearBookmark(e, bannerBookmark.lessonKey)}
                   className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-slate-800 hover:bg-amber-100/60 transition cursor-pointer"
                   title="북마크 해제"
                 >
