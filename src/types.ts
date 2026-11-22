@@ -12,6 +12,18 @@ export interface KoreanChunkItem {
   grammarRole?: string;
 }
 
+export interface SentenceChunkItem {
+  text: string;
+  meaning?: string;
+  grammarRole?: string;
+}
+
+export interface SyntaxTokenItem {
+  text: string;
+  role?: string;
+  color?: string;
+}
+
 export interface SentenceItem {
   id: string;
   raw_text: string;
@@ -21,6 +33,9 @@ export interface SentenceItem {
   syntax_diagram?: string;
   pronunciation_hint?: string;
   liaison_hint?: string;
+  pronunciationGuide?: string;
+  chunks?: SentenceChunkItem[];
+  syntaxTokens?: SyntaxTokenItem[];
   vocabulary: VocabularyItem[];
   // Korean learning mode fields
   sound_romanization?: string;

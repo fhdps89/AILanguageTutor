@@ -32,7 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isLoading,
 }) => {
   return (
-    <aside className="w-full md:w-80 shrink-0 space-y-5 rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200">
+    <aside className="w-full min-w-0 max-w-full md:w-80 shrink-0 space-y-5 rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200">
       {/* Demo Option */}
       <div className="rounded-lg bg-indigo-50/50 p-3.5 border border-indigo-100">
         <label className="flex items-start gap-2.5 cursor-pointer">
@@ -42,13 +42,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onChange={(e) => onDemoChange(e.target.checked)}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
           />
-          <div className="text-sm">
+          <div className="min-w-0 text-sm">
             <span className="font-semibold text-indigo-950 flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-indigo-600" />
               데모 무료 체험 모드
             </span>
             <p className="text-sm text-slate-600 mt-1">
-              사진 업로드 없이도 실제 쉐도잉과 네이티브 발음 및 구문 분석을 즉시 체험할 수 있습니다.
+              사진 업로드 없이도 실제 쉐도잉과 원어민 수준의 AI 음성 (합성 TTS) 및 구문 분석을 즉시 체험할 수 있습니다.
             </p>
           </div>
         </label>

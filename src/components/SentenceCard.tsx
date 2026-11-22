@@ -152,7 +152,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
   const textToSpeak = sentence.tts_text || sentence.raw_text;
   const langParam = language?.name_en || language?.code || 'en-US';
-  const pronHint = sentence.pronunciation_hint || sentence.liaison_hint;
+  const pronHint = sentence.pronunciation_hint || sentence.liaison_hint || sentence.pronunciationGuide;
   const isFrench = (language?.code || '').startsWith('fr');
   const isKoreanMode = (language?.code || '').startsWith('ko');
   const isChineseMode = (language?.code || '').startsWith('zh');
@@ -176,7 +176,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
     // 소리가 중간에 브라우저 음성으로 바뀌어 onStart가 두 번 불려도 시작 기록은 한 번만 보낸다
     let startTracked = false;
     playSentenceAudio({
-      audioUrl: rate === 1.0 ? rawAudioUrl : null,
+      audioUrl: rawAudioUrl || null,
       text: textToSpeak,
       lang: langParam,
       rate,
@@ -424,13 +424,13 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
   if (!isExpanded) {
     return (
-      <div id={`sentence-${sentence.id}`} ref={rootRef} className="scroll-mt-24">
+      <div id={`sentence-${sentence.id}`} ref={rootRef} className="min-w-0 max-w-full overflow-x-hidden scroll-mt-24">
         <button
           type="button"
           onClick={handleRowTap}
           aria-expanded={false}
           aria-label={`${index + 1}번 문장 듣기: ${sentence.raw_text}`}
-          className={`flex w-full min-h-[60px] items-center gap-3 rounded-xl border px-3 py-2 text-left shadow-sm transition cursor-pointer ${
+          className={`flex w-full min-w-0 max-w-full min-h-[60px] items-center gap-3 rounded-xl border px-3 py-2 text-left shadow-sm transition cursor-pointer ${
             isBookmarked
               ? 'bg-amber-50/40 border-amber-400 hover:bg-amber-50'
               : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
@@ -471,10 +471,10 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       id={`sentence-${sentence.id}`}
       ref={rootRef}
       aria-expanded={true}
-      className="rounded-xl p-4 sm:p-5 shadow-sm border transition scroll-mt-24 bg-blue-50/40 border-blue-600 ring-1 ring-blue-200"
+      className="min-w-0 max-w-full overflow-x-hidden rounded-xl p-4 sm:p-5 shadow-sm border transition scroll-mt-24 bg-blue-50/40 border-blue-600 ring-1 ring-blue-200"
     >
       {/* 재생·정지 버튼과 상태 표시 한 줄 */}
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => (isBusy ? handleStop() : handlePlayRate(preferredRate))}
@@ -489,8 +489,8 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 gap-2">
-        <div className="flex items-center flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 mb-3 gap-2">
+        <div className="flex min-w-0 items-center flex-wrap gap-2">
           <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
             {sentence.id}
           </span>
@@ -511,30 +511,32 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {onToggleBookmark && (
             <button
               onClick={onToggleBookmark}
-              className={`flex min-h-11 items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium transition cursor-pointer ${
+              className={`flex min-h-11 shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium transition cursor-pointer ${
                 isBookmarked
                   ? 'bg-amber-500 text-white font-semibold shadow-xs hover:bg-amber-600'
                   : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50/80 border border-slate-200 bg-white'
               }`}
               title={isBookmarked ? '시작 지점 북마크 해제' : '내일 학습 시작 위치로 북마크'}
             >
-              <Bookmark className={`h-3.5 w-3.5 ${isBookmarked ? 'fill-white text-white' : 'text-slate-400'}`} />
+              <Bookmark className={`h-3.5 w-3.5 shrink-0 ${isBookmarked ? 'fill-white text-white' : 'text-slate-400'}`} />
               <span>{isBookmarked ? '내일의 시작점' : '북마크'}</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* Card Body */}
+      <div className="min-w-0 max-w-full overflow-x-hidden">
       {/* Target Language Text */}
-      <div className="mb-2">
+      <div className="mb-2 min-w-0 max-w-full">
         <span className="mb-1 block text-xs font-bold tracking-wider text-slate-600">
           {language ? `${language.flag} ${language.name_ko}:` : '원문:'}
         </span>
-        <p className="text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
+        <p className="wrap-anywhere text-base sm:text-lg font-medium text-slate-900 leading-relaxed font-serif">
           {renderKaraokeText(
             sentence.raw_text,
             isAudioPlaying,
@@ -545,15 +547,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
         {/* Chinese Pinyin with Tones */}
         {isChineseMode && sentence.pinyin && (
-          <div className="mt-2 flex items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
+          <div className="mt-2 flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
             <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">🇨🇳 한어병음:</span>
-            <span className="tracking-wide leading-relaxed text-slate-800 font-medium">{sentence.pinyin}</span>
+            <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{sentence.pinyin}</span>
           </div>
         )}
 
         {isKoreanMode && sentence.sound_romanization && (
-          <div className="mt-2 text-sm text-slate-600 font-mono tracking-wide">
-            🗣️ <span className="italic text-slate-600">{sentence.sound_romanization}</span>
+          <div className="mt-2 min-w-0 max-w-full text-sm text-slate-600 font-mono tracking-wide">
+            🗣️ <span className="wrap-anywhere italic text-slate-600">{sentence.sound_romanization}</span>
           </div>
         )}
       </div>
@@ -613,18 +615,18 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
       </div>
 
       {/* Translation */}
-      <div className="mb-3 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
+      <div className="mb-3 min-w-0 max-w-full bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
         <span className="text-xs font-bold tracking-wider text-slate-600 block mb-0.5">
           {isKoreanMode ? '영어 번역 (Translation):' : '한국어 번역:'}
         </span>
-        <p className="text-sm text-slate-800 leading-normal font-sans">
+        <p className="wrap-anywhere text-sm text-slate-800 leading-normal font-sans">
           {sentence.translation}
         </p>
       </div>
 
       {/* Korean Morphological Chunks or 끊어 읽기 chips */}
       {isKoreanMode && sentence.korean_chunks && sentence.korean_chunks.length > 0 ? (
-        <div className="mb-3 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
+        <div className="mb-3 min-w-0 max-w-full bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
           <div className="flex items-center justify-between gap-1 mb-2">
             <span className="text-sm font-bold text-slate-700">
               조사·어미 청크 (터치하여 발음 듣기):
@@ -637,18 +639,18 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               return (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md p-1 px-2 shadow-2xs hover:border-indigo-300 transition"
+                  className="inline-flex max-w-full items-center gap-1 bg-white border border-slate-200 rounded-md p-1 px-2 shadow-2xs hover:border-indigo-300 transition"
                 >
                   <button
                     type="button"
                     onClick={() => handlePlayChunk(chk.text)}
-                    className={`inline-flex min-h-9 items-center gap-1 text-sm font-serif font-medium transition cursor-pointer ${
+                    className={`inline-flex min-h-9 max-w-full items-center gap-1 text-sm font-serif font-medium transition cursor-pointer text-left wrap-anywhere ${
                       isPlayingThis ? 'text-indigo-600 font-bold' : 'text-slate-900 hover:text-indigo-600'
                     }`}
                     title={`"${chk.text}" 1.0x 발음 듣기`}
                   >
                     <Volume2 className={`h-3.5 w-3.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-slate-400'}`} />
-                    <span>{chk.text}</span>
+                    <span className="wrap-anywhere">{chk.text}</span>
                   </button>
                   {chk.grammarRole && (
                     <span className="text-xs font-mono font-medium text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100">
@@ -661,7 +663,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           </div>
         </div>
       ) : hasBreathChips ? (
-        <div className="mb-3 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
+        <div className="mb-3 min-w-0 max-w-full bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80">
           <div className="mb-2">
             <span className="block text-sm font-bold text-slate-700">끊어 읽기</span>
             <span className="block text-sm text-slate-600">덩어리를 누르면 그 부분만 들려요</span>
@@ -681,7 +683,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                     type="button"
                     onClick={() => handlePlayChunk(chunk)}
                     aria-pressed={isPlayingThis}
-                    className={`inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-serif transition cursor-pointer text-left ${
+                    className={`inline-flex max-w-full min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-serif transition cursor-pointer text-left wrap-anywhere ${
                       filled
                         ? 'bg-blue-600 text-white font-semibold shadow-xs ring-1 ring-blue-300'
                         : 'bg-white border border-indigo-200/70 text-indigo-950 font-medium hover:bg-indigo-50'
@@ -693,7 +695,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                     ) : (
                       <Volume2 className={`h-3.5 w-3.5 shrink-0 ${filled ? 'text-white' : 'text-indigo-500'}`} />
                     )}
-                    <span>{chunk}</span>
+                    <span className="wrap-anywhere min-w-0">{chunk}</span>
                   </button>
                   {idx < arr.length - 1 && (
                     <span className="text-slate-600 font-bold px-0.5 select-none text-base" aria-hidden="true">
@@ -715,7 +717,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               type="button"
               onClick={() => setShowSyntax(!showSyntax)}
               aria-expanded={showSyntax}
-              className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50/50 px-3.5 py-2 rounded-lg border border-slate-200 transition cursor-pointer"
+              className="flex min-h-11 shrink-0 whitespace-nowrap items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50/50 px-3.5 py-2 rounded-lg border border-slate-200 transition cursor-pointer"
             >
               <span>📐 구문 분석도</span>
             </button>
@@ -726,7 +728,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
               type="button"
               onClick={() => setShowVocab(!showVocab)}
               aria-expanded={showVocab}
-              className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50/50 px-3.5 py-2 rounded-lg border border-slate-200 transition cursor-pointer"
+              className="flex min-h-11 shrink-0 whitespace-nowrap items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50/50 px-3.5 py-2 rounded-lg border border-slate-200 transition cursor-pointer"
             >
               <span>📚 핵심 어휘{hasVocab ? ` (${sentence.vocabulary.length}개)` : ''}</span>
             </button>
@@ -736,11 +738,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
       {/* Collapsible Syntax Diagram */}
       {showSyntax && sentence.syntax_diagram && !isKoreanMode && (
-        <div className="mt-3">
+        <div className="mt-3 min-w-0 max-w-full">
           <span className="text-sm font-bold text-slate-700 block mb-1">
             구문 분해 (문장 구조도):
           </span>
-          <pre className="overflow-x-auto rounded bg-slate-900 p-3 text-sm font-mono text-emerald-400 whitespace-pre-wrap leading-relaxed">
+          <pre className="wrap-pre-anywhere max-w-full overflow-x-auto rounded bg-slate-900 p-3 text-sm font-mono text-emerald-400 leading-relaxed">
             {sentence.syntax_diagram}
           </pre>
         </div>
@@ -748,7 +750,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
 
       {/* Collapsible Vocabulary (+ 연음/성조 발음 팁) */}
       {showVocab && hasVocabPanel && (
-        <div className="mt-3">
+        <div className="mt-3 min-w-0 max-w-full">
           {hasVocab && (
             <>
               <div className="flex items-center justify-between gap-1 mb-2">
@@ -766,22 +768,22 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => handlePlayVocab(v.word)}
-                      className={`flex min-h-11 items-start justify-between rounded-md p-2 text-sm border text-left transition cursor-pointer ${
+                      className={`flex min-w-0 max-w-full min-h-11 items-start justify-between gap-2 rounded-md p-2 text-sm border text-left transition cursor-pointer ${
                         isPlayingThis
                           ? 'bg-indigo-50 border-indigo-400 ring-1 ring-indigo-200'
                           : 'bg-slate-50 border-slate-200 hover:bg-indigo-50/50 hover:border-indigo-300'
                       }`}
                       title={`"${v.word}" 발음 듣기`}
                     >
-                      <div className="flex items-start gap-1.5">
+                      <div className="flex min-w-0 flex-1 items-start gap-1.5">
                         {isVocabPreparing ? (
                           <Loader2 className="h-3.5 w-3.5 mt-0.5 shrink-0 animate-spin text-indigo-600" />
                         ) : (
                           <Volume2 className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isPlayingThis ? 'text-indigo-600 animate-pulse' : 'text-indigo-400'}`} />
                         )}
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-slate-900 font-serif">
+                            <span className="wrap-anywhere font-semibold text-slate-900 font-serif">
                               {v.word}
                             </span>
                             {v.pinyin && (
@@ -801,13 +803,13 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                             )}
                           </div>
                           {v.hint && (
-                            <div className="text-xs text-amber-700 font-mono mt-0.5">
+                            <div className="wrap-anywhere text-xs text-amber-700 font-mono mt-0.5">
                               {v.hint}
                             </div>
                           )}
                         </div>
                       </div>
-                      <span className="text-slate-600 text-right ml-2 shrink-0">
+                      <span className="wrap-anywhere text-slate-600 text-right max-w-[48%]">
                         {v.meaning}
                       </span>
                     </button>
@@ -818,11 +820,11 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           )}
 
           {pronHint && (
-            <div className="mt-2 inline-flex items-center gap-1 text-sm text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
-              <span className="font-bold text-amber-800">
+            <div className="mt-2 flex flex-wrap items-start gap-1 min-w-0 max-w-full text-sm text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md font-mono border border-amber-200/70">
+              <span className="font-bold text-amber-800 shrink-0">
                 {isFrench ? '🗣️ 연음' : isChineseMode ? '🗣️ 성조/발음 팁' : '🗣️ 발음'}:
               </span>
-              <span>{pronHint}</span>
+              <span className="wrap-anywhere min-w-0 flex-1">{pronHint}</span>
             </div>
           )}
         </div>
@@ -856,7 +858,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                     type="button"
                     disabled={reportStep === 'sending'}
                     onClick={() => sendReport(opt.reason)}
-                    className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50 cursor-pointer"
+                    className="min-h-11 shrink-0 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50 cursor-pointer"
                   >
                     {opt.label}
                   </button>
@@ -865,7 +867,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
                   type="button"
                   disabled={reportStep === 'sending'}
                   onClick={() => setReportStep('idle')}
-                  className="min-h-11 px-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
+                  className="min-h-11 shrink-0 whitespace-nowrap px-2 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
                 >
                   취소
                 </button>
@@ -874,6 +876,7 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };

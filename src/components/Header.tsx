@@ -9,9 +9,9 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ build, onOpenLibrary }) => {
   return (
     <header className="mb-6 border-b border-slate-200 pb-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-md">
             <Globe className="h-4 w-4" />
           </div>
           <span
@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({ build, onOpenLibrary }) => {
           type="button"
           onClick={onOpenLibrary}
           aria-label="내 서재 열기"
-          className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+          className="flex h-11 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
         >
           <BookOpen className="h-4 w-4 text-slate-500" />
           내 서재
