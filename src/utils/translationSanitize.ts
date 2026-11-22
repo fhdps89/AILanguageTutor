@@ -29,8 +29,14 @@ export function stripPromptLeakage(translation: string): string {
   cleaned = cleaned.replace(KO_QUOTATION_META_RE, (_match, endingChar: string, offset: number, full: string) => {
     const tail = full.slice(offset + _match.length).trimStart();
     const hadPeriod = _match.trimEnd().endsWith('.');
+    const period = hadPeriod || tail.length === 0 ? '.' : '';
     if (endingChar === '라') {
-      return hadPeriod || tail.length === 0 ? '다.' : '다';
+      // "이라고 글은 말한다" → "이다." 만 변환. "돌아가리라고 글은 전한다"는 "돌아가리라."로 남긴다.
+      const charBefore = offset > 0 ? full[offset - 1] : '';
+      if (charBefore === '이') {
+        return `다${period}`;
+      }
+      return `라${period}`;
     }
     return hadPeriod ? '다.' : '다';
   });
@@ -40,7 +46,7 @@ export function stripPromptLeakage(translation: string): string {
   // Normalize punctuation and whitespace artifacts left after stripping
   cleaned = cleaned
     .replace(/\s+([.,!?])/g, '$1')
-    .replace(/\.{2}(?!\.)/g, '.')
+    .replace(/(?<!\.)\.{2}(?!\.)/g, '.')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

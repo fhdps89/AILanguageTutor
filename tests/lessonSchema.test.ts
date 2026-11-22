@@ -118,4 +118,43 @@ describe('translationSanitize & lessonSchema', () => {
       assert.ok(s.breath_marks?.includes('/'), `${s.id} should have "/" in breath_marks`);
     }
   });
+
+  it('preserves ellipses and does not rewrite ~라고 tails that are not 이라고', () => {
+    const withEllipsis = '...잘려 있다... 그리고 이어진다.';
+    assert.equal(stripPromptLeakage(withEllipsis), withEllipsis);
+    assert.equal(stripPromptLeakage('잠깐.. 그리고 간다.'), '잠깐. 그리고 간다.');
+
+    assert.equal(
+      stripPromptLeakage('돌아가리라고 글은 전한다.'),
+      '돌아가리라.'
+    );
+    assert.equal(
+      stripPromptLeakage('집으로 가라고 글은 말한다.'),
+      '집으로 가라.'
+    );
+    assert.equal(
+      stripPromptLeakage('사실이라고 이 글은 설명한다.'),
+      '사실이다.'
+    );
+  });
+
+  it('normalizeLessonPage is idempotent and keeps ellipses after two passes', () => {
+    const raw = {
+      title: '잘린 문장',
+      language: { code: 'fr-FR', name_ko: '프랑스어', name_en: 'French' },
+      sentences: [
+        {
+          id: 's01',
+          raw_text: 'Il dit que le texte continue...',
+          translation: '...잘려 있다... 돌아가리라고 글은 전한다.',
+        },
+      ],
+    };
+    const once = normalizeLessonPage(raw);
+    const twice = normalizeLessonPage(once);
+    assert.equal(once.sentences[0].translation, twice.sentences[0].translation);
+    assert.ok(once.sentences[0].translation.includes('...잘려 있다...'));
+    assert.ok(once.sentences[0].translation.includes('돌아가리라'));
+    assert.ok(!once.sentences[0].translation.includes('돌아가리다'));
+  });
 });
