@@ -42,7 +42,7 @@ describe('shadowingScheduler timing & reducer', () => {
       { done: true, nextIndex: 0, nextRepeat: 1 }
     );
 
-    // repeatTarget = 1: advances through sentences, then done on last
+    // repeatTarget = 1: each sentence once, then advance; done after the last
     assert.deepEqual(
       decideLoop({ currentIndex: 0, totalSentences: 3, currentRepeat: 1, repeatTarget: 1 }),
       { done: false, nextIndex: 1, nextRepeat: 1 }
@@ -52,24 +52,28 @@ describe('shadowingScheduler timing & reducer', () => {
       { done: true, nextIndex: 0, nextRepeat: 1 }
     );
 
-    // repeatTarget = 3: wraps to next repeat until repeat 3 finishes
+    // repeatTarget = 3: stay on the current sentence until 3 plays, then advance
     assert.deepEqual(
-      decideLoop({ currentIndex: 2, totalSentences: 3, currentRepeat: 1, repeatTarget: 3 }),
+      decideLoop({ currentIndex: 0, totalSentences: 3, currentRepeat: 1, repeatTarget: 3 }),
       { done: false, nextIndex: 0, nextRepeat: 2 }
     );
     assert.deepEqual(
-      decideLoop({ currentIndex: 2, totalSentences: 3, currentRepeat: 2, repeatTarget: 3 }),
+      decideLoop({ currentIndex: 0, totalSentences: 3, currentRepeat: 2, repeatTarget: 3 }),
       { done: false, nextIndex: 0, nextRepeat: 3 }
+    );
+    assert.deepEqual(
+      decideLoop({ currentIndex: 0, totalSentences: 3, currentRepeat: 3, repeatTarget: 3 }),
+      { done: false, nextIndex: 1, nextRepeat: 1 }
     );
     assert.deepEqual(
       decideLoop({ currentIndex: 2, totalSentences: 3, currentRepeat: 3, repeatTarget: 3 }),
       { done: true, nextIndex: 0, nextRepeat: 3 }
     );
 
-    // repeatTarget = 'infinite': never done
+    // repeatTarget = 'infinite': stay on the same sentence forever
     assert.deepEqual(
       decideLoop({ currentIndex: 2, totalSentences: 3, currentRepeat: 99, repeatTarget: 'infinite' }),
-      { done: false, nextIndex: 0, nextRepeat: 100 }
+      { done: false, nextIndex: 2, nextRepeat: 100 }
     );
 
     // Single sentence with 3 repeats
@@ -153,12 +157,18 @@ describe('shadowingScheduler timing & reducer', () => {
     assert.equal(state.phase, 'shadowing_pause');
     assert.equal(state.pauseRemainingMs, 11500);
 
-    // Skip ends shadowing_pause immediately and advances to next sentence
+    // Skip counts the current repeat as done but stays on the sentence when target is 3
     state = schedulerReducer(state, { type: 'SKIP_PAUSE' });
+    assert.equal(state.phase, 'playing_tts');
+    assert.equal(state.currentIndex, 0);
+    assert.equal(state.currentRepeat, 2);
+    assert.equal(state.pauseRemainingMs, 0);
+
+    // NEXT leaves the current sentence even if repeats remain (escape from ∞ / user skip-ahead)
+    state = schedulerReducer(state, { type: 'NEXT' });
     assert.equal(state.phase, 'playing_tts');
     assert.equal(state.currentIndex, 1);
     assert.equal(state.currentRepeat, 1);
-    assert.equal(state.pauseRemainingMs, 0);
 
     // Listen mode uses short_gap 350ms at 1.0x
     let listenState = createInitialSchedulerState({

@@ -50,19 +50,21 @@ export function decideLoop({
   const safeIndex = Math.max(0, Math.floor(currentIndex));
   const safeRepeat = Math.max(1, Math.floor(currentRepeat));
 
+  // Per-sentence repeats: stay on the same sentence until the target is met,
+  // then move to the next sentence (work order 5-2 loop_check).
+  if (repeatTarget === 'infinite' || safeRepeat < repeatTarget) {
+    return {
+      done: false,
+      nextIndex: safeIndex,
+      nextRepeat: safeRepeat + 1,
+    };
+  }
+
   if (safeIndex + 1 < totalSentences) {
     return {
       done: false,
       nextIndex: safeIndex + 1,
-      nextRepeat: safeRepeat,
-    };
-  }
-
-  if (repeatTarget === 'infinite' || safeRepeat < repeatTarget) {
-    return {
-      done: false,
-      nextIndex: 0,
-      nextRepeat: safeRepeat + 1,
+      nextRepeat: 1,
     };
   }
 
@@ -140,7 +142,8 @@ export type SchedulerAction =
   | { type: 'SET_MODE'; mode: SchedulerMode }
   | { type: 'SET_RATE'; playbackRate: number }
   | { type: 'SET_REPEAT_TARGET'; repeatTarget: RepeatTarget }
-  | { type: 'SET_TOTAL_SENTENCES'; totalSentences: number };
+  | { type: 'SET_TOTAL_SENTENCES'; totalSentences: number }
+  | { type: 'NEXT' };
 
 export function createInitialSchedulerState(
   overrides: Partial<SchedulerState> = {}
@@ -357,6 +360,30 @@ export function schedulerReducer(
       return {
         ...state,
         totalSentences: action.totalSentences,
+      };
+    }
+
+    case 'NEXT': {
+      if (state.phase === 'idle') return state;
+      if (state.currentIndex + 1 < state.totalSentences) {
+        return {
+          ...state,
+          phase: 'playing_tts',
+          pausedFromPhase: null,
+          currentIndex: state.currentIndex + 1,
+          currentRepeat: 1,
+          pauseTotalMs: 0,
+          pauseRemainingMs: 0,
+        };
+      }
+      return {
+        ...state,
+        phase: 'idle',
+        pausedFromPhase: null,
+        currentIndex: 0,
+        currentRepeat: 1,
+        pauseTotalMs: 0,
+        pauseRemainingMs: 0,
       };
     }
 

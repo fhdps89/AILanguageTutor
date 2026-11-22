@@ -356,6 +356,17 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
     dispatch({ type: 'SKIP_PAUSE' });
   };
 
+  const handleNextSentence = () => {
+    if (state.phase === 'idle') return;
+    activePlaySessionRef.current += 1;
+    stopAllAudio();
+    audioCoordinator.release('relay', RELAY_TTS_OWNER_ID);
+    audioCoordinator.release('relay', RELAY_GAP_OWNER_ID);
+    playingStepKeyRef.current = null;
+    setPlayNonce((n) => n + 1);
+    dispatch({ type: 'NEXT' });
+  };
+
   const handleModeChange = (mode: SchedulerMode) => {
     dispatch({ type: 'SET_MODE', mode });
   };
@@ -573,6 +584,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
                   ? `듣는 중 (${state.currentIndex + 1}/${sentences.length} 문장 · ${state.currentRepeat}/${repeatLabel}회)`
                   : '전체 듣는 중'}
               </span>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={handlePause}
@@ -581,6 +593,17 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
                 <Pause className="h-3.5 w-3.5 shrink-0" />
                 <span>일시정지</span>
               </button>
+              {hasSentences && (
+                <button
+                  type="button"
+                  onClick={handleNextSentence}
+                  className="inline-flex min-h-9 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-50 transition cursor-pointer"
+                >
+                  <SkipForward className="h-3.5 w-3.5 shrink-0" />
+                  <span>다음 문장</span>
+                </button>
+              )}
+              </div>
             </div>
             <div
               role="progressbar"
@@ -604,6 +627,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
               <span className="text-xs sm:text-sm font-semibold text-emerald-900">
                 지금 따라 말해 보세요 · {formatRemainingTenths(state.pauseRemainingMs)}초 남음
               </span>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={handleSkipPause}
@@ -612,6 +636,14 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
                 <SkipForward className="h-3.5 w-3.5 shrink-0" />
                 <span>바로 넘기기</span>
               </button>
+              <button
+                type="button"
+                onClick={handleNextSentence}
+                className="inline-flex min-h-9 shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 transition cursor-pointer"
+              >
+                <span>다음 문장</span>
+              </button>
+              </div>
             </div>
             <div
               role="progressbar"
