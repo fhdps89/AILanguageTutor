@@ -19,7 +19,8 @@
   - 녹음 데이터는 기기 메모리(로컬 Blob)에만 임시 보관되며 서버로 업로드되지 않는다.
   - 침묵 공식 `Math.max(2000, Math.round((durationSec / rate) * 1000 * 1.2))`에서 `0.5` 속도 하한을 두지 않는다.
   - `0.5x` 재생은 PR A와 동일하게 1.0x 캐시 음원에 클라이언트 `playbackRate`를 적용하는 방식을 계속 사용한다.
-- **확인한 것:** `npm test`, `npm run lint`, `npm run build` 통과.
+- **확인한 것:** `npm test`, `npm run lint`, `npm run build` 통과. 로컬 Playwright는 TTS를 네트워크 경계에서 모킹했고, 실 마이크 녹음·iOS Safari mp4 폴백·실기기 탭 전환 카운트다운은 이 환경에서 검증하지 못했다.
+- **리뷰 후속 (2026-11-22):** HTML5 음원에서 일시정지 후 재개할 때 기존 재생 세션을 복구해 `onComplete`가 쉐도잉 침묵으로 이어지게 했다(`playSession.restoreStep`). 마이크 권한 대기 중 선점되면 녹음 버튼을 `RESET_IDLE`로 되돌린다. 단일 전문 재생도 `document.hidden` 때 멈추도록 `singlePlaying`을 ref로 읽는다.
 
 ---
 

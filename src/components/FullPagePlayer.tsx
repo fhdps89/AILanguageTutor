@@ -24,6 +24,7 @@ import {
   formatRemainingTenths,
   schedulerReducer,
 } from '../utils/shadowingScheduler';
+import { createPlaySessionTracker } from '../utils/playSession';
 import { LanguageInfo, SentenceItem } from '../types';
 
 interface FullPagePlayerProps {
@@ -73,8 +74,11 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
   const [singlePlaying, setSinglePlaying] = useState(false);
 
   const isMountedRef = useRef(true);
-  const activePlaySessionRef = useRef(0);
+  const playSessionRef = useRef(createPlaySessionTracker());
+  const playSession = playSessionRef.current;
   const playingStepKeyRef = useRef<string | null>(null);
+  const singlePlayingRef = useRef(false);
+  singlePlayingRef.current = singlePlaying;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -86,7 +90,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
   }, [sentences.length]);
 
   const stopEverything = () => {
-    activePlaySessionRef.current += 1;
+    playSession.invalidate();
     playingStepKeyRef.current = null;
     audioCoordinator.release('relay', RELAY_GAP_OWNER_ID);
     stopAllAudio();
@@ -102,13 +106,13 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       cur.phase === 'short_gap' ||
       cur.phase === 'shadowing_pause'
     ) {
-      activePlaySessionRef.current += 1;
+      playSession.invalidate();
       if (cur.phase === 'playing_tts') {
         pauseActiveAudio();
       }
       audioCoordinator.release('relay', RELAY_GAP_OWNER_ID);
       dispatch({ type: 'PAUSE' });
-    } else if (singlePlaying) {
+    } else if (singlePlayingRef.current) {
       setSinglePlaying(false);
       stopAllAudio();
     }
@@ -141,7 +145,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       unregGap();
       window.removeEventListener('ai-tutor-rate-limit', handleRateLimit);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      activePlaySessionRef.current += 1;
+      playSession.invalidate();
       stopAllAudio();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -162,7 +166,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
     }
 
     audioCoordinator.release('relay', RELAY_GAP_OWNER_ID);
-    const session = ++activePlaySessionRef.current;
+    const session = playSession.beginStep();
     setSentencePlaybackTime({ currentTime: 0, duration: 0 });
 
     const rawAudio = audioFiles[`${sentence.id}.mp3`];
@@ -180,7 +184,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       channel: 'relay',
       ownerId: RELAY_TTS_OWNER_ID,
       onStart: () => {
-        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
+        if (!isMountedRef.current || !playSession.isCurrent(session)) return;
         wallStartMs = Date.now();
         if (!startTracked) {
           startTracked = true;
@@ -194,11 +198,11 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
         }
       },
       onTimeUpdate: ({ currentTime, duration }) => {
-        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
+        if (!isMountedRef.current || !playSession.isCurrent(session)) return;
         setSentencePlaybackTime({ currentTime, duration });
       },
       onComplete: ({ voice, durationSec }) => {
-        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
+        if (!isMountedRef.current || !playSession.isCurrent(session)) return;
         trackSentence('sentence_complete', {
           rate: speed,
           mode: 'relay',
@@ -225,14 +229,14 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
         });
       },
       onError: () => {
-        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
+        if (!isMountedRef.current || !playSession.isCurrent(session)) return;
         playingStepKeyRef.current = null;
         audioCoordinator.claim('relay', RELAY_GAP_OWNER_ID);
         dispatch({ type: 'AUDIO_ERROR' });
       },
       onPreempt: () => {
-        if (!isMountedRef.current || session !== activePlaySessionRef.current) return;
-        activePlaySessionRef.current += 1;
+        if (!isMountedRef.current || !playSession.isCurrent(session)) return;
+        playSession.invalidate();
         playingStepKeyRef.current = null;
         dispatch({ type: 'PAUSE' });
       },
@@ -314,7 +318,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
       stopEverything();
       return;
     }
-    activePlaySessionRef.current += 1;
+    playSession.invalidate();
     if (state.phase === 'playing_tts') {
       const paused = pauseActiveAudio();
       if (!paused) {
@@ -337,8 +341,8 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
         playingStepKeyRef.current = null;
         setPlayNonce((n) => n + 1);
       } else {
-        // Restore active session tracking for remaining callbacks
-        activePlaySessionRef.current += 1;
+        // Keep the original step session so onComplete/onTimeUpdate still fire
+        playSession.restoreStep();
       }
       dispatch({ type: 'RESUME' });
       return;
@@ -358,7 +362,7 @@ export const FullPagePlayer: React.FC<FullPagePlayerProps> = ({
 
   const handleNextSentence = () => {
     if (state.phase === 'idle') return;
-    activePlaySessionRef.current += 1;
+    playSession.invalidate();
     stopAllAudio();
     audioCoordinator.release('relay', RELAY_TTS_OWNER_ID);
     audioCoordinator.release('relay', RELAY_GAP_OWNER_ID);

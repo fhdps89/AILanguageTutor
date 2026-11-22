@@ -155,6 +155,7 @@ export const ShadowingRecorder: React.FC<ShadowingRecorderProps> = ({
 
   useEffect(() => {
     isMountedRef.current = true;
+    dispatch({ type: 'RESET_IDLE' });
 
     const unregRec = audioCoordinator.register('recording', recOwnerId, () => {
       stopActiveRecording(false);
@@ -244,6 +245,9 @@ export const ShadowingRecorder: React.FC<ShadowingRecorderProps> = ({
           t.stop();
         } catch {}
       });
+      if (isMountedRef.current) {
+        dispatch({ type: 'RESET_IDLE' });
+      }
       return;
     }
 

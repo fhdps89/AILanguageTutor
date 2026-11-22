@@ -43,4 +43,17 @@ describe('shadowingRecorderMachine', () => {
     assert.equal(state.status, 'cleanup');
     assert.equal(state.playingTarget, 'none');
   });
+
+  it('returns to idle from requesting_permission when preempted (RESET_IDLE)', () => {
+    let state = createInitialRecorderState();
+    state = recorderReducer(state, { type: 'REQUEST_PERMISSION' });
+    assert.equal(state.status, 'requesting_permission');
+    state = recorderReducer(state, { type: 'RESET_IDLE' });
+    assert.equal(state.status, 'idle');
+    assert.equal(state.errorReason, null);
+
+    state = recorderReducer(state, { type: 'START_CLEANUP' });
+    state = recorderReducer(state, { type: 'RESET_IDLE' });
+    assert.equal(state.status, 'idle');
+  });
 });

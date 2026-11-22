@@ -63,6 +63,7 @@
   - **로컬 쉐도잉 녹음기 (`src/components/ShadowingRecorder.tsx` + `src/utils/shadowingRecorderMachine.ts`):** 카드 속도 바 하단 1줄 도크, 브라우저 로컬 Blob 전용(서버 업로드 없음, 30초 자동 정지, 레벨 바, `[원어 듣기]` 캐시 재사용, `[내 발음 듣기]`, `[A→B 연속 비교]`).
   - **블라인드 모드 & 구문 컬러 칩 (`App.tsx`, `SentenceCard.tsx`, `src/utils/syntaxTokens.ts`):** `[원문 숨기기]`·`[발음 힌트 숨기기]`·`[해석 숨기기]` 토글(레이아웃 유지, 탭 시 임시 보기) 및 역할별 색상 칩(주어=파랑, 술어=초록, 목적어=보라, 수식어=주황, 연결/기타=회색, 말줄임 없이 줄바꿈, 데모 JSON `s01` 말줄임 보완).
   - **0.5x 배속 정책 유지:** PR A에서 전환된 클라이언트 `playbackRate` 방식(1.0x 오디오 캐시 공유)을 그대로 사용한다.
+  - **리뷰 후속:** HTML5 일시정지 재개 시 재생 세션을 복구하고, 권한 대기 중 선점 시 녹음 버튼을 idle로 되돌린다. 실 마이크·iOS Safari는 로컬에서 미검증.
 - **PR A (2026-11-22 KST, UX 리뷰 P0/P1 수정):**
   - **P0 레이아웃 오버플로:** 카드·본문·사이드바·메인 플렉스(`min-w-0`) 및 줄바꿈(`overflow-wrap: anywhere`) 보강, `FullPagePlayer` 일시정지 버튼 `whitespace-nowrap` 및 최소 너비 적용.
   - **P0 TTS 캐시/쿼터 (Option A):** 클라이언트 TTS 캐시 키에서 속도를 제외하고 항상 `1.0x` 오디오만 요청·캐시·인플라이트 중복 제거. `0.75x`/`0.5x`는 브라우저 `audio.playbackRate` + `preservesPitch = true`로 재생(기존 서버 측 저속 합성 대비 `0.5x` 음질 차이 가능성 있음).
