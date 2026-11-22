@@ -126,15 +126,23 @@ describe('translationSanitize & lessonSchema', () => {
 
     assert.equal(
       stripPromptLeakage('돌아가리라고 글은 전한다.'),
-      '돌아가리라.'
+      '돌아가리라고 한다.'
     );
     assert.equal(
       stripPromptLeakage('집으로 가라고 글은 말한다.'),
-      '집으로 가라.'
+      '집으로 가라고 한다.'
     );
     assert.equal(
       stripPromptLeakage('사실이라고 이 글은 설명한다.'),
       '사실이다.'
+    );
+    assert.equal(
+      stripPromptLeakage('그는 의사라고 글은 말한다.'),
+      '그는 의사라고 한다.'
+    );
+    assert.equal(
+      stripPromptLeakage('사실이 아니라고 글은 전한다.'),
+      '사실이 아니다.'
     );
   });
 
@@ -154,7 +162,7 @@ describe('translationSanitize & lessonSchema', () => {
     const twice = normalizeLessonPage(once);
     assert.equal(once.sentences[0].translation, twice.sentences[0].translation);
     assert.ok(once.sentences[0].translation.includes('...잘려 있다...'));
-    assert.ok(once.sentences[0].translation.includes('돌아가리라'));
+    assert.ok(once.sentences[0].translation.includes('돌아가리라고 한다'));
     assert.ok(!once.sentences[0].translation.includes('돌아가리다'));
   });
 });
