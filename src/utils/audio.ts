@@ -161,7 +161,9 @@ export async function playSentenceAudio({
   try {
     const audio = getSharedAudio();
     const applyPlaybackRate = () => {
-      audio.playbackRate = rate;
+      const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+      audio.defaultPlaybackRate = safeRate;
+      audio.playbackRate = safeRate;
       (audio as any).preservesPitch = true;
       (audio as any).mozPreservesPitch = true;
       (audio as any).webkitPreservesPitch = true;

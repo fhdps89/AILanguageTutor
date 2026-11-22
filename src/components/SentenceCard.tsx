@@ -558,6 +558,15 @@ export const SentenceCard: React.FC<SentenceCardProps> = ({
             🗣️ <span className="wrap-anywhere italic text-slate-600">{sentence.sound_romanization}</span>
           </div>
         )}
+
+        {!isChineseMode && !isKoreanMode && pronHint && (
+          <div className="mt-2 flex min-w-0 max-w-full items-start gap-2 text-sm font-sans text-amber-950 bg-amber-50/90 px-3 py-1.5 rounded-lg border border-amber-200/80">
+            <span className="font-bold text-amber-800 text-xs shrink-0 mt-0.5">
+              {isFrench ? '🗣️ 연음·발음:' : '🗣️ 발음 가이드:'}
+            </span>
+            <span className="wrap-anywhere min-w-0 tracking-wide leading-relaxed text-slate-800 font-medium">{pronHint}</span>
+          </div>
+        )}
       </div>
 
       {/* 진행 슬롯: 높이를 고정해 두고, 음성 준비 중에는 로딩 상자, 재생 중에는 진행 막대 */}
