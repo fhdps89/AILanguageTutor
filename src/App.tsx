@@ -9,6 +9,8 @@ import { LibrarySheet } from './components/LibrarySheet';
 import { LessonPage, LibraryItem, SystemStatus, StudyBookmark, DailyQuota } from './types';
 import { Info, AlertCircle, CheckCircle2, Bookmark, ArrowRight, X, ChevronDown, ChevronUp, Image as ImageIcon, Camera, Loader2 } from 'lucide-react';
 import { getDeviceId } from './utils/audio';
+import { normalizeLessonPage } from './utils/lessonSchema';
+import { loadBookmarks, saveBookmark, removeBookmark, getLatestBookmark } from './utils/bookmarks';
 
 // 예시 수업(demo-arc, demo-chinese)은 내 수업이 아니다. 서재 목록에는 내 수업만 둔다.
 const isOwnLesson = (item: LibraryItem) => item.key !== 'demo-arc' && item.key !== 'demo-chinese';
@@ -58,16 +60,12 @@ export function App() {
   // Local storage helpers
   const STORAGE_LIB_KEY = 'ai_tutor_saved_library_v2';
   const STORAGE_PAGES_KEY = 'ai_tutor_saved_pages_v2';
-  const STORAGE_BOOKMARK_KEY = 'ai_tutor_saved_bookmark_v2';
 
-  const [bookmark, setBookmark] = useState<StudyBookmark | null>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_BOOKMARK_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [bookmarksByBook, setBookmarksByBook] = useState<Record<string, StudyBookmark>>(() =>
+    loadBookmarks()
+  );
+  const currentBookmark = currentKey ? (bookmarksByBook[currentKey] ?? null) : null;
+  const latestBookmark = getLatestBookmark(bookmarksByBook);
 
   const getStoredLibrary = (): LibraryItem[] => {
     try {
@@ -273,14 +271,13 @@ export function App() {
         }
       }
 
-      if (loadedData) {
-        saveStoredPage(key, {
-          page: loadedData.page,
-          photoUrl: loadedData.photoUrl || null,
-        });
-      }
+      const normalizedPage = normalizeLessonPage(loadedData.page);
+      saveStoredPage(key, {
+        page: normalizedPage,
+        photoUrl: loadedData.photoUrl || null,
+      });
 
-      setCurrentPage(loadedData.page);
+      setCurrentPage(normalizedPage);
       setCurrentKey(loadedData.key);
       setPhotoUrl(loadedData.photoUrl || null);
       setSelectedKey(loadedData.key);
@@ -313,6 +310,13 @@ export function App() {
         const currentStored = getStoredLibrary();
         const updatedStored = currentStored.filter((item) => item.key !== key);
         saveStoredLibrary(updatedStored);
+        removeBookmark(key);
+        setBookmarksByBook((prev) => {
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
       } catch (err) {
         console.warn('LocalStorage cleanup failed', err);
       }
@@ -345,9 +349,13 @@ export function App() {
   const handleToggleBookmark = (sentenceId: string, sentenceText: string) => {
     if (!currentPage || !currentKey) return;
 
-    if (bookmark && bookmark.lessonKey === currentKey && bookmark.sentenceId === sentenceId) {
-      setBookmark(null);
-      localStorage.removeItem(STORAGE_BOOKMARK_KEY);
+    if (currentBookmark && currentBookmark.lessonKey === currentKey && currentBookmark.sentenceId === sentenceId) {
+      removeBookmark(currentKey);
+      setBookmarksByBook((prev) => {
+        const next = { ...prev };
+        delete next[currentKey];
+        return next;
+      });
       setInfoMessage(`[${sentenceId}] 시작 위치 북마크가 해제되었습니다.`);
       return;
     }
@@ -362,25 +370,23 @@ export function App() {
       updatedAt: new Date().toISOString(),
     };
 
-    setBookmark(newBookmark);
-    try {
-      localStorage.setItem(STORAGE_BOOKMARK_KEY, JSON.stringify(newBookmark));
-      setInfoMessage(`[${sentenceId}] 문장이 내일 학습 시작 지점으로 저장되었습니다.`);
-    } catch {}
+    saveBookmark(currentKey, newBookmark);
+    setBookmarksByBook((prev) => ({ ...prev, [currentKey]: newBookmark }));
+    setInfoMessage(`[${sentenceId}] 문장이 내일 학습 시작 지점으로 저장되었습니다.`);
   };
 
-  const handleResumeBookmark = async () => {
-    if (!bookmark) return;
+  const handleResumeBookmark = async (targetBookmark: StudyBookmark | null = currentBookmark) => {
+    if (!targetBookmark) return;
 
-    if (currentKey !== bookmark.lessonKey) {
-      await loadLesson(bookmark.lessonKey);
+    if (currentKey !== targetBookmark.lessonKey) {
+      await loadLesson(targetBookmark.lessonKey);
     }
 
     // 해당 문장을 펼치기만 한다 (자동 재생은 하지 않는다)
     setTimeout(() => {
-      setExpandedId(bookmark.sentenceId);
+      setExpandedId(targetBookmark.sentenceId);
       setTimeout(() => {
-        const el = document.getElementById(`sentence-${bookmark.sentenceId}`);
+        const el = document.getElementById(`sentence-${targetBookmark.sentenceId}`);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -388,22 +394,30 @@ export function App() {
     }, 300);
   };
 
-  const handleClearBookmark = (e: React.MouseEvent) => {
+  const handleClearBookmark = (e: React.MouseEvent, lessonKey = currentKey) => {
     e.stopPropagation();
-    setBookmark(null);
-    localStorage.removeItem(STORAGE_BOOKMARK_KEY);
+    if (!lessonKey) return;
+    removeBookmark(lessonKey);
+    setBookmarksByBook((prev) => {
+      const next = { ...prev };
+      delete next[lessonKey];
+      return next;
+    });
     setInfoMessage('시작 위치 북마크가 삭제되었습니다.');
   };
+
+  // 수업이 열려 있으면 그 책의 북마크만, 랜딩(수업 미선택)에서는 가장 최근 북마크로 이어가기 배너를 보여 준다.
+  const bannerBookmark = currentKey ? currentBookmark : latestBookmark;
 
   // 업로드 칸은 사진을 고른 뒤, 또는 수업이 없는 날 사진 한도를 다 쓴 때만 보인다
   const isPhotoLimitReached = Boolean(quota && quota.analyze.remaining === 0);
   const showUploadCard = Boolean(selectedFile) || (isPhotoLimitReached && !currentPage);
 
-  const canContinueFromLibrary = Boolean(bookmark || pickLatestOwn(library));
+  const canContinueFromLibrary = Boolean((!currentKey && latestBookmark) || pickLatestOwn(library));
 
   const handleContinueFromLibrary = () => {
-    if (bookmark) {
-      handleResumeBookmark();
+    if (!currentKey && latestBookmark) {
+      handleResumeBookmark(latestBookmark);
       return;
     }
     const latestOwn = pickLatestOwn(library);
@@ -441,16 +455,17 @@ export function App() {
       }
       const data = await res.json();
       const lessonKey = data.key || (demoLang === 'zh' ? 'demo-chinese' : 'demo-arc');
-      setCurrentPage(data.page);
+      const normalizedPage = normalizeLessonPage(data.page);
+      setCurrentPage(normalizedPage);
       setCurrentKey(lessonKey);
       setPhotoUrl(null);
 
       saveStoredPage(lessonKey, {
-        page: data.page,
+        page: normalizedPage,
         photoUrl: null,
       });
-      const langName = data.page.language?.name_ko || '외국어';
-      setInfoMessage(`${langName} 데모 페이지("${data.page.title}")를 불러왔습니다. AI 합성 음성으로 바로 들어 보세요.`);
+      const langName = normalizedPage.language?.name_ko || '외국어';
+      setInfoMessage(`${langName} 데모 페이지("${normalizedPage.title}")를 불러왔습니다. AI 합성 음성으로 바로 들어 보세요.`);
     } catch (err: any) {
       setErrorMessage(err.message);
       setErrorCode(null);
@@ -529,27 +544,28 @@ export function App() {
           fetchQuota();
         }, 5000);
       }
-      setCurrentPage(data.page);
+      const normalizedPage = normalizeLessonPage(data.page);
+      setCurrentPage(normalizedPage);
       setCurrentKey(data.key);
       setSelectedKey(data.key);
       const activePhotoUrl = data.photoUrl || URL.createObjectURL(selectedFile);
       setPhotoUrl(activePhotoUrl);
 
       saveStoredPage(data.key, {
-        page: data.page,
+        page: normalizedPage,
         photoUrl: data.photoUrl || null,
       });
 
       const newItem: LibraryItem = {
         key: data.key,
-        title: data.page.title,
-        book_title: data.page.library_title || '교재 학습',
-        page_no: data.page.library_page || 1,
+        title: normalizedPage.title,
+        book_title: normalizedPage.library_title || '교재 학습',
+        page_no: normalizedPage.library_page || 1,
         created_at: new Date().toISOString(),
         source: 'upload',
-        n_sentences: data.page.sentences.length,
+        n_sentences: normalizedPage.sentences.length,
         saved_at: new Date().toISOString(),
-        language: data.page.language,
+        language: normalizedPage.language,
         ownerId: getDeviceId(),
       };
       const curList = getStoredLibrary();
@@ -559,7 +575,7 @@ export function App() {
       if (data.reused) {
         setInfoMessage('이미 분석한 사진입니다. 캐시된 데이터를 재사용합니다.');
       } else {
-        const langLabel = data.page?.language ? `${data.page.language.flag} ${data.page.language.name_ko}` : '외국어';
+        const langLabel = normalizedPage?.language ? `${normalizedPage.language.flag} ${normalizedPage.language.name_ko}` : '외국어';
         setInfoMessage(`[Gemini Vision] ${langLabel} 언어 감지 및 구문 분해가 완료되었습니다!`);
       }
 
@@ -580,10 +596,10 @@ export function App() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-3 sm:px-4 py-6 sm:py-8">
+    <div className="mx-auto max-w-5xl overflow-x-hidden px-3 sm:px-4 py-6 sm:py-8">
       <Header build={status.build} onOpenLibrary={handleOpenLibrary} />
 
-      <div className="flex flex-col md:flex-row gap-6 items-start">
+      <div className="flex flex-col md:flex-row gap-6 items-start min-w-0">
         <LibrarySheet
           open={isLibraryOpen}
           onClose={() => setIsLibraryOpen(false)}
@@ -601,7 +617,7 @@ export function App() {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 w-full space-y-6">
+        <main className="min-w-0 flex-1 w-full max-w-full space-y-6">
           {!currentPage && !isLoading && (
             <LandingHero
               quota={quota}
@@ -672,41 +688,41 @@ export function App() {
             </div>
           )}
 
-          {/* Bookmark banner */}
-          {bookmark && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 border border-amber-300/80 p-4 shadow-xs">
-              <div className="flex items-center gap-3">
+          {/* Bookmark banner: current lesson when open, otherwise the latest bookmark on the landing screen */}
+          {bannerBookmark && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 min-w-0 max-w-full rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 border border-amber-300/80 p-4 shadow-xs">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
                   <Bookmark className="h-5 w-5 fill-current" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded">
                       📍 내일은 여기서부터 시작
                     </span>
                     <span className="text-xs text-amber-800">
-                      {new Date(bookmark.updatedAt).toLocaleDateString()} 저장
+                      {new Date(bannerBookmark.updatedAt).toLocaleDateString()} 저장
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-slate-800 mt-0.5">
-                    <span className="font-semibold text-slate-900">{bookmark.lessonTitle}</span>
+                  <p className="text-sm font-medium text-slate-800 mt-0.5 wrap-anywhere">
+                    <span className="font-semibold text-slate-900">{bannerBookmark.lessonTitle}</span>
                     <span className="mx-1.5 text-slate-300">·</span>
-                    <span className="font-mono text-indigo-700 font-bold mr-1.5">{bookmark.sentenceId}</span>
-                    <span className="text-slate-600 line-clamp-1 italic">"{bookmark.sentenceText}"</span>
+                    <span className="font-mono text-indigo-700 font-bold mr-1.5">{bannerBookmark.sentenceId}</span>
+                    <span className="text-slate-600 line-clamp-1 italic">"{bannerBookmark.sentenceText}"</span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
                 <button
-                  onClick={handleResumeBookmark}
-                  className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-700 transition cursor-pointer"
+                  onClick={() => handleResumeBookmark(bannerBookmark)}
+                  className="flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-700 transition cursor-pointer"
                 >
                   <span>바로 이어하기</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                 </button>
                 <button
-                  onClick={handleClearBookmark}
-                  className="rounded-lg p-1.5 text-slate-600 hover:text-slate-800 hover:bg-amber-100/60 transition cursor-pointer"
+                  onClick={(e) => handleClearBookmark(e, bannerBookmark.lessonKey)}
+                  className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-slate-800 hover:bg-amber-100/60 transition cursor-pointer"
                   title="북마크 해제"
                 >
                   <X className="h-4 w-4" />
@@ -774,7 +790,7 @@ export function App() {
                 </div>
 
                 {currentPage.sentences?.map((sentence, index) => {
-                  const isBookmarked = bookmark?.lessonKey === currentKey && bookmark?.sentenceId === sentence.id;
+                  const isBookmarked = currentBookmark?.lessonKey === currentKey && currentBookmark?.sentenceId === sentence.id;
 
                   return (
                     <SentenceCard

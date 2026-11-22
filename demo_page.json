@@ -1,4 +1,10 @@
 {
+  "language": {
+    "code": "fr-FR",
+    "name_ko": "프랑스어",
+    "name_en": "French",
+    "flag": "🇫🇷"
+  },
   "title": "L’ARC DE TRIOMPHE",
   "full_tts_script": "L’Arc de Triomphe. Il trône sur la place de l’Étoile, au centre de douze avenues qui le sertissent comme un diamant au sommet d’une colline : l’Arc de triomphe est le plus grand monument de ce genre au monde. Comme ceux érigés par les empereurs romains, il fut avant tout construit pour célébrer les armées victorieuses. C’est Napoléon Premier, au lendemain de la bataille d’Austerlitz le deux décembre mil huit cent cinq, qui avait déclaré à ses soldats : Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe. Mais cette bataille triomphale est suivie de défaites, et l’exil de l’empereur en mil huit cent quatorze à l’île d’Elbe, puis sa mort en mil huit cent vingt et un, compliquent durablement les travaux. Il fallut finalement trente ans pour que l’arc soit inauguré en mil huit cent trente-six. Hauts et bas-reliefs célèbrent la nation rassemblée, comme dans le Départ des Volontaires de mil sept cent quatre-vingt-douze de François Rude, mieux connu sous le nom de La Marseillaise. Et de fait, c’est aussi ce rôle que joue l’Arc de triomphe, un catalyseur des espérances et des grandes heures de la Patrie.",
   "disclaimer_ko": "음성은 합성 TTS이며 원어민이 아닙니다. 한글 표기는 힌트([~])일 뿐입니다.",
@@ -8,9 +14,10 @@
       "raw_text": "L’ARC DE TRIOMPHE",
       "tts_text": "L’Arc de Triomphe",
       "translation": "개선문 (제목)",
-      "breath_marks": "L’ARC DE TRIOMPHE",
+      "breath_marks": "L’ARC / DE TRIOMPHE",
       "syntax_diagram": "[제목] L’ARC DE TRIOMPHE",
       "liaison_hint": "L’‿Arc",
+      "pronunciation_hint": "L’‿Arc [라르크 드 트리옹프] — L’ 뒤 모음 A를 이어 부드럽게 발음",
       "vocabulary": [
         {"word": "Arc de triomphe", "meaning": "개선문 (고유 건축물 이름)", "hint": "[~ 아르크 드 트리옹프]"}
       ]
@@ -23,6 +30,7 @@
       "breath_marks": "Il trône sur la place de l’Étoile, / au centre de douze avenues / qui le sertissent comme un diamant au sommet d’une colline :",
       "syntax_diagram": "Il trône [장소] sur la place de l’Étoile\n        [부가] au centre de douze avenues\n               qui le sertissent comme un diamant…",
       "liaison_hint": "l’‿Étoile · douze‿avenues",
+      "pronunciation_hint": "l’‿Étoile · douze‿avenues [두자브뉘] — 끝 자음과 다음 모음의 연음(liaison)에 유의",
       "vocabulary": [
         {"word": "trôner", "meaning": "군림하다/우뚝하다 — 주어 Il의 동사", "hint": "[~ 트론]"},
         {"word": "place de l’Étoile", "meaning": "에투알 광장(현 드골 광장)", "hint": "[~ 플라스 드 레트왈]"},
@@ -33,12 +41,13 @@
       "id": "s02",
       "raw_text": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
       "tts_text": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
-      "translation": "개선문은 이 종류의 기념물 가운데 세계에서 가장 크다고 이 글은 말한다. (글의 수사. 독립 사실로 단정하지 말 것)",
-      "breath_marks": "l’Arc de triomphe est le plus grand monument de ce genre au monde.",
+      "translation": "개선문은 이 종류의 기념물 가운데 세계에서 가장 크다.",
+      "breath_marks": "l’Arc de triomphe / est le plus grand monument / de ce genre au monde.",
       "syntax_diagram": "l’Arc de triomphe  est  le plus grand monument\n                         de ce genre  au monde",
       "liaison_hint": "l’‿Arc · grand‿monument",
+      "pronunciation_hint": "l’‿Arc · plus [플뤼] — 최상급 앞 plus는 끝 s를 묵음 처리(모음 앞 제외)",
       "vocabulary": [
-        {"word": "le plus grand", "meaning": "최상급 ‘가장 큰’ — 글의 주장", "hint": "[~ 르 플뤼 그랑]"},
+        {"word": "le plus grand", "meaning": "최상급 ‘가장 큰’", "hint": "[~ 르 플뤼 그랑]"},
         {"word": "de ce genre", "meaning": "이 종류의", "hint": ""}
       ]
     },
@@ -50,6 +59,7 @@
       "breath_marks": "Comme ceux érigés par les empereurs romains, / il fut avant tout construit / pour célébrer les armées victorieuses.",
       "syntax_diagram": "Comme ceux érigés par les empereurs romains,\nil  fut construit  pour célébrer  les armées victorieuses\n   (être 단순과거 + 과거분사 = 수동)",
       "liaison_hint": "les‿empereurs · armées‿victorieuses",
+      "pronunciation_hint": "les‿empereurs [레장프뢰르] — 복수 관사 les 뒤 모음 연음 [z]",
       "vocabulary": [
         {"word": "érigés", "meaning": "세워진 — 과거분사, ceux와 성수 일치", "hint": "[~ 에리제]"},
         {"word": "il fut construit", "meaning": "그것이 건설되었다 (수동)", "hint": ""}
@@ -59,10 +69,11 @@
       "id": "s04",
       "raw_text": "C’est Napoléon Ier, au lendemain de la bataille d’Austerlitz le 2 décembre 1805, qui avait déclaré à ses soldats : « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe ».",
       "tts_text": "C’est Napoléon Premier, au lendemain de la bataille d’Austerlitz le deux décembre mil huit cent cinq, qui avait déclaré à ses soldats : Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe.",
-      "translation": "아우스터리츠 전투 다음날인 1805년 12월 2일, 나폴레옹 1세가 병사들에게 이렇게 말했다고 글은 전한다. 「너희는 개선문 아래로만 집으로 돌아가리라.」",
+      "translation": "아우스터리츠 전투 다음날인 1805년 12월 2일, 나폴레옹 1세가 병사들에게 이렇게 말했다. 「너희는 개선문 아래로만 집으로 돌아가리라.」",
       "breath_marks": "C’est Napoléon Ier, / au lendemain de la bataille d’Austerlitz le 2 décembre 1805, / qui avait déclaré à ses soldats : / « Vous ne rentrerez dans vos foyers que sous des arcs de Triomphe ».",
       "syntax_diagram": "C’est [Napoléon Ier] qui avait déclaré …\n인용: ne … que = 오직 ~만\nVous ne rentrerez … que sous des arcs de Triomphe",
       "liaison_hint": "C’est · dans‿vos",
+      "pronunciation_hint": "C’est [세] · des‿arcs [데자르크] — 복수 관사 des와 모음 a 연음 [z]",
       "vocabulary": [
         {"word": "C’est A qui", "meaning": "강조 구문 ‘바로 A가’", "hint": ""},
         {"word": "ne … que", "meaning": "오직 ~만", "hint": ""},

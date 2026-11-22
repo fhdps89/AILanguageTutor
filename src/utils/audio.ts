@@ -3,15 +3,14 @@
  * Supports English, French, Japanese, Spanish, German, Chinese, and other foreign languages.
  */
 
+import { DEFAULT_TTS_VOICE, resolveAudioUrl } from './audioCache';
+
 // Global reusable audio element to satisfy iOS Safari autoplay / sequential playback restrictions
 let sharedAudio: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let practiceTimer: any = null;
 let activeRafId: number | null = null;
 let currentPlayId = 0;
-
-// Client-side in-memory cache for resolved hash audio URLs
-const resolvedUrlCache = new Map<string, string>();
 
 export function getDeviceId(): string {
   try {
@@ -94,123 +93,9 @@ export function stopAllAudio() {
   }
 }
 
-const PREPARING_MESSAGES = [
-  '🎙️ 성우 섭외하는 중...',
-  '📝 대본 건네고 읽는 방식 조율 중...',
-  '🔴 스튜디오에서 열심히 녹음 중...',
-  '🎧 녹음된 음성 모니터링 중...',
-  '✨ 음성 다듬는 중...',
-];
-
 /**
- * Resolves a reliable hash-based audio stream URL for Gemini Native TTS.
- * When speed is 0.75 or 0.5, requests the server to prepare native articulated speech.
- */
-async function resolveAudioUrl(
-  audioUrl: string | null | undefined,
-  text: string,
-  lang: string,
-  speed: string,
-  onPreparing?: (msg: string) => void
-): Promise<string> {
-  const cacheKey = `${text}_${lang}_${speed}`;
-  if (resolvedUrlCache.has(cacheKey)) {
-    return resolvedUrlCache.get(cacheKey)!;
-  }
-
-  // If already a clean hash URL with matching speed 1.0, return directly
-  if (audioUrl && /^\/api\/tts\/[a-f0-9]{64}$/.test(audioUrl) && speed === '1.0') {
-    resolvedUrlCache.set(cacheKey, audioUrl);
-    return audioUrl;
-  }
-
-  // Start animated humorous status message cycle
-  let msgIdx = 0;
-  onPreparing?.(PREPARING_MESSAGES[0]);
-  const msgInterval = setInterval(() => {
-    msgIdx = (msgIdx + 1) % PREPARING_MESSAGES.length;
-    onPreparing?.(PREPARING_MESSAGES[msgIdx]);
-  }, 750);
-
-  // Request server to prepare hash-based audio via POST
-  try {
-    const deviceId = getDeviceId();
-    const res = await fetch('/api/tts/prepare', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-device-id': deviceId,
-      },
-      body: JSON.stringify({
-        text,
-        lang,
-        speed,
-        voice: 'Kore',
-      }),
-    });
-    clearInterval(msgInterval);
-
-    // If rate limit reached, notify UI and do not fall back to browser speech
-    if (res.status === 429) {
-      const errData = await res.json().catch(() => ({}));
-      if (errData.quota && typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ai-tutor-quota', {
-            detail: errData.quota,
-          })
-        );
-      }
-      const message =
-        errData.error ||
-        (errData.code === 'TTS_GLOBAL_LIMIT'
-          ? '오늘은 많은 분이 이용해서 음성이 잠시 쉬고 있어요. 내일 다시 와 주세요.'
-          : '오늘 들을 수 있는 음성을 모두 사용했어요. 내일 다시 이용해 주세요.');
-      const code = errData.code || 'TTS_DEVICE_LIMIT';
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ai-tutor-rate-limit', {
-            detail: { message, code },
-          })
-        );
-      }
-      const rateErr = new Error(message);
-      (rateErr as any).isRateLimit = true;
-      (rateErr as any).code = code;
-      throw rateErr;
-    }
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.quota && typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ai-tutor-quota', {
-            detail: data.quota,
-          })
-        );
-      }
-      if (data.audioUrl) {
-        resolvedUrlCache.set(cacheKey, data.audioUrl);
-        return data.audioUrl;
-      }
-    }
-  } catch (e: any) {
-    clearInterval(msgInterval);
-    if (e?.isRateLimit) {
-      throw e;
-    }
-    console.warn('Failed to prepare hash audio, falling back to query route', e);
-  }
-
-  clearInterval(msgInterval);
-  // Fallback to GET endpoint with &deviceId=... query
-  const deviceId = getDeviceId();
-  const fallbackUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&speed=${encodeURIComponent(speed)}&deviceId=${encodeURIComponent(deviceId)}`;
-  return fallbackUrl;
-}
-
-/**
- * Play native Gemini TTS audio (/api/tts/:hash) or fallback to Web Speech API
+ * Play native Gemini TTS audio (/api/tts/:hash at 1.0x) with client playbackRate
+ * or fallback to Web Speech API
  */
 export async function playSentenceAudio({
   audioUrl,
@@ -245,11 +130,17 @@ export async function playSentenceAudio({
     return;
   }
 
-  const speedParam = rate === 1.0 ? '1.0' : String(rate);
   let targetAudioUrl: string;
 
   try {
-    targetAudioUrl = await resolveAudioUrl(audioUrl, cleanText, lang, speedParam, onPreparing);
+    targetAudioUrl = await resolveAudioUrl({
+      audioUrl,
+      text: cleanText,
+      lang,
+      voice: DEFAULT_TTS_VOICE,
+      deviceId: getDeviceId(),
+      onPreparing,
+    });
   } catch (err: any) {
     if (thisPlayId === currentPlayId) {
       if (activeRafId) {
@@ -269,8 +160,17 @@ export async function playSentenceAudio({
 
   try {
     const audio = getSharedAudio();
+    const applyPlaybackRate = () => {
+      const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+      audio.defaultPlaybackRate = safeRate;
+      audio.playbackRate = safeRate;
+      (audio as any).preservesPitch = true;
+      (audio as any).mozPreservesPitch = true;
+      (audio as any).webkitPreservesPitch = true;
+    };
+
     audio.src = targetAudioUrl;
-    audio.playbackRate = 1.0;
+    applyPlaybackRate();
 
     const startProgressLoop = () => {
       if (activeRafId) {
@@ -294,6 +194,7 @@ export async function playSentenceAudio({
 
     audio.onplay = () => {
       if (thisPlayId === currentPlayId) {
+        applyPlaybackRate();
         onStart?.();
         startProgressLoop();
       }
@@ -356,6 +257,7 @@ export async function playSentenceAudio({
     };
 
     audio.load();
+    applyPlaybackRate();
     await audio.play();
   } catch (err: any) {
     if (thisPlayId === currentPlayId) {

@@ -1,8 +1,24 @@
 # 📜 전체 버전별 변경 이력 및 릴리즈 노트 (Changelog Archive)
 
-> **공식 기준 빌드:** `build 20261012-multilingual`  
+> **공식 기준 빌드:** `build 20261122-multilingual`  
 > **표준 시간대:** KST (한국 표준시, UTC+9)  
 > **원칙:** 코드 및 아키텍처 업데이트 시 모든 로그 무삭제 보존 및 KST 일자 기준 정렬
+
+---
+
+## [2026-11-22 KST] UX 리뷰 P0/P1 수정 (PR A: 레이아웃 오버플로, TTS 캐시/쿼터 Option A, 프롬프트 누수·스키마, 책별 북마크)
+- **배경:** 실사용 리뷰에서 긴 프랑스어 문장/구문도의 가로 넘침(P0), 배속 변경 시 `/api/tts/prepare` 재요청으로 인한 TTS 쿼터 이중 차감(P0), 번역문 내 프롬프트 지침 누수 및 제목 끊어 읽기 부재(P1), 다른 책의 북마크 배너 노출·포스터 미표시·카피 과장(P1)이 확인되어 PR A 범위에서 우선 수정했다. (P2 쉐도잉 녹음·스케줄러·블라인드 모드·구문 컬러 칩은 PR B로 분리)
+- **변경:**
+  - **P0 레이아웃 오버플로:** `App.tsx`의 `md:flex-row` 안 `<main>`에 `min-w-0` 추가. `SentenceCard.tsx` 카드 루트/본문과 `FullPagePlayer.tsx`에 `min-w-0 max-w-full overflow-x-hidden` 적용, 원문·번역·구문 텍스트 줄바꿈(`.wrap-anywhere` / `.wrap-pre-anywhere`) 보강, 헤더·액션바 `flex-wrap gap-2` 및 버튼 `whitespace-nowrap shrink-0`, `FullPagePlayer` "일시정지" 버튼 `min-w-[112px] whitespace-nowrap` 적용.
+  - **P0 TTS 캐시/쿼터 (Option A):** `src/utils/audioCache.ts` 신설(`DEFAULT_TTS_VOICE`, `ttsCacheKey`, `getCachedAudioUrl`, `setCachedAudioUrl`, `clearAudioCacheForTests`, `resolveAudioUrl`). 캐시 키에서 속도를 제거하고 인플라이트 요청을 키별로 중복 제거하며 항상 `speed: '1.0'`으로 준비한다. `src/utils/audio.ts`는 1.0x 음원을 불러온 뒤 `audio.playbackRate = rate` 및 `preservesPitch = true`를 적용한다. `SentenceCard.tsx`는 배속과 무관하게 `rawAudioUrl`을 그대로 전달한다. `server.ts`의 `generateGeminiSpeech`도 비-1.0x 요청이 들어오더라도 안전하게 `'1.0'`으로 캐시·생성하도록 통일.
+  - **P1 프롬프트 누수·스키마·데모 데이터:** `src/utils/translationSanitize.ts`(`stripPromptLeakage`) 및 `src/utils/lessonSchema.ts`(`chunksFromBreathMarks`, `ensureSentenceSchema`, `normalizeLessonPage`) 추가. `server.ts`의 `SYSTEM_PROMPT`를 강화(번역 메타 금지, 전 언어 `pronunciation_guide` 및 최소 2개 `chunks` 요구, 기존 필드 호환 유지)하고 `normalizePage`, `/api/demo`, `/api/lesson/:key`, `/api/analyze` 캐시 분기와 클라이언트 `App.tsx`의 수업/데모/분석 로드 경로에 정규화를 연결했다. `demo_page.json`(프랑스어 `language` 객체 추가, `s02`/`s04` 누수 제거, `s00`/`s02` 끊어 읽기 슬래시 및 발음 팁 보강)과 `demo_chinese.json`(`s00` `"北京 / 故宫"` 분리)을 정비했다.
+  - **P1 카피·포스터·책별 북마크:** `Sidebar.tsx`의 "네이티브 발음"을 "원어민 수준의 AI 음성 (합성 TTS)"로 교체. `LandingDemoVideo.tsx`에서 포스터 `<img>`를 `<video>` 아래 기본 레이어로 상시 렌더링(reduced-motion 동작 유지). `src/utils/bookmarks.ts` 신설(`ai_tutor_bookmarks_by_book_v3`, v2→v3 자동 마이그레이션 및 v2 보존)로 `App.tsx`의 북마크 배너·토글·해제를 현재 열린 `lessonKey` 기준으로 격리한다. 수업이 열려 있지 않은 랜딩에서는 예전처럼 가장 최근 북마크 배너(바로 이어하기·해제)를 보여 주고, 그 북마크의 `lessonKey`로 동작한다.
+  - **단위 테스트 추가 (`node:test` + `tsx`):** `tests/audioCache.test.ts`, `tests/bookmarks.test.ts`, `tests/lessonSchema.test.ts` 및 `package.json` `"test"` 스크립트 추가.
+- **참고 및 주의:**
+  - `0.5x` 배속은 서버 측 저속 TTS 생성 대신 클라이언트 `playbackRate = 0.5`를 사용하므로 기존 서버 측 저속 합성 대비 음질 차이가 있을 수 있다(카라오케 `currentTime`은 미디어 타임 기준이므로 싱크는 유지됨).
+  - 기존 서재(`cache/`)에 저장된 페이지는 재생성하지 않으며, 서버/클라이언트 로더의 `normalizeLessonPage`가 읽기 시 fallback을 적용한다.
+- **확인한 것:** `npm test`, `npm run lint`, `npm run build` 실행 및 결과 확인 완료.
+- **리뷰 후속 (2026-11-22):** 번역 정제가 `"..."` 말줄임표를 지우지 않는다. `"이라고"`는 `"이다."`, `"아니라고"`는 `"아니다."`로 바꾸고, 나머지는 명령형·서술격을 오인하지 않도록 `"라고 한다."`로 남긴다. 두 번 정규화해도 결과가 같다. 랜딩 북마크 배너를 복구해 changelog에 명시했다.
 
 ---
 

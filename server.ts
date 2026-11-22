@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import sharp from 'sharp';
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from '@google/genai';
 import { upsertOwnerRow, canAccessLesson, planLessonDelete } from './libraryRules';
+import { normalizeLessonPage } from './src/utils/lessonSchema';
 
 dotenv.config();
 
@@ -477,25 +478,37 @@ CRITICAL RULES:
    - Identify the primary language of the text (Korean 'ko', French 'fr-FR', English 'en-US', Japanese 'ja-JP', German 'de-DE', Spanish 'es-ES', Chinese 'zh-CN', etc.).
    - NEVER translate the original source text into another foreign language in "raw_text" and "tts_text". They MUST be the exact verbatim text in the source language.
 
-2. CASE A: KOREAN SOURCE TEXT (Learning Korean for English/Global learners):
+2. TRANSLATION QUALITY (NO PROMPT LEAKAGE / NO META):
+   - "translation" MUST contain ONLY the natural, idiomatic translation in the target language (Korean for foreign sources; English for Korean source).
+   - NEVER include meta-commentary, attribution framing (e.g. "~다고 이 글은 말한다", "~글은 전한다"), or parenthetical caveats/instructions (e.g. "(글의 수사. 독립 사실로 단정하지 말 것)") inside "translation".
+
+3. REQUIRED PRONUNCIATION GUIDE & CHUNKS (EVERY LANGUAGE):
+   - Every sentence MUST include "pronunciation_guide" (and backward-compatible "pronunciation_hint"):
+     * Chinese: full Hanyu Pinyin with tone marks + tone sandhi tips.
+     * Japanese: furigana/kana reading + pitch/rhythm notes.
+     * French/English/German/Spanish/Korean: IPA or liaison/stress/intonation tips.
+   - Every sentence MUST include "chunks" (array of { "text": "...", "meaning": "..." } with at least 2 meaningful phrasing units whenever the sentence has 2+ words/units) AND "breath_marks" joining those exact chunk texts with " / " so both old and new UI work seamlessly.
+
+4. CASE A: KOREAN SOURCE TEXT (Learning Korean for English/Global learners):
    - If the main printed text is in Korean (book, magazine, article):
-     * "translation": Natural and accurate English translation.
+     * "translation": Natural and accurate English translation ONLY (no meta/instructions).
      * "sound_romanization": Exact spoken phonetic romanization (ONE single representation reflecting actual assimilation/liaison, e.g. "gieop-ui seongjang-eun haruachim-e irueojiji anki ttaemun-ida"). Never show dual romanization. For already-English words like "FOMO" or loanwords like "인베스팅" (investing), keep them clean and natural.
-     * "korean_chunks": Array of meaningful grammatical chunks with particle/inflection breakdown.
+     * "korean_chunks": Array of meaningful grammatical chunks with particle/inflection breakdown (also reflected in "chunks").
      * "formality_badge": ONLY tag if there is a distinct sentence-ending speech level ("Formal (하십시오체)", "Polite (해요체)", "Casual (반말)"). Neutral written descriptive endings (-다, -이다, -ㄴ다) MUST return null.
      * "vocabulary": Array of { "word", "meaning" (English), "baseForm", "pos", "hint" }.
      * STRICT OPTICAL DEFENSE: Ignore faint bleed-through text from reverse side; strip footnote asterisks; if the last sentence is cut off, transcribe only visible text with ellipsis.
 
-3. CASE B: CHINESE SOURCE TEXT (Learning Chinese for Korean learners):
+5. CASE B: CHINESE SOURCE TEXT (Learning Chinese for Korean learners):
    - If the source is Chinese ('zh-CN', 'zh-TW', 'zh'):
      * "language": { "code": "zh-CN", "name_ko": "중국어", "name_en": "Chinese", "flag": "🇨🇳" }
      * "raw_text": Verbatim Chinese characters from the document/book.
      * "tts_text": Spoken form in Mandarin Chinese.
      * "pinyin": Full Hanyu Pinyin with standard tone marks (e.g., "Běijīng gùgōng shì shìjiè shàng..."). Accurately transcribe tones.
-     * "translation": Natural, fluent, and idiomatic Korean translation.
-     * "breath_marks": The original Chinese sentence with "/" inserted at natural breath/thought group pauses.
+     * "translation": Natural, fluent, and idiomatic Korean translation ONLY.
+     * "chunks": Minimum 2 meaningful breath/thought-group units { "text", "meaning" }.
+     * "breath_marks": The original Chinese sentence with " / " inserted at the exact chunk boundaries.
      * "syntax_diagram": ASCII chunk breakdown diagram explaining sentence structure in Korean (e.g. [주어 主语] + [부사어 状语] + [술어 谓语] + [목적어 宾语]).
-     * "pronunciation_hint": Tone sandhi tips (e.g., "3성+3성 연속 시 앞 2성 변조", "不/一 성조 변화", "권설음 zh/ch/sh/r", "경성 처리").
+     * "pronunciation_guide" & "pronunciation_hint": Tone sandhi tips (e.g., "3성+3성 연속 시 앞 2성 변조", "不/一 성조 변화", "권설음 zh/ch/sh/r", "경성 처리").
      * "vocabulary": Key vocabulary words with:
        - "word": Chinese character(s)
        - "pinyin": Hanyu Pinyin with tone marks
@@ -504,15 +517,16 @@ CRITICAL RULES:
        - "pos": Part of speech
        - "hint": Pronunciation/tone hint
 
-4. CASE C: OTHER FOREIGN SOURCE TEXT (French, English, Japanese, German, Spanish, etc.):
+6. CASE C: OTHER FOREIGN SOURCE TEXT (French, English, Japanese, German, Spanish, etc.):
    - If the source is French, English, Japanese, German, Spanish, etc.:
-     * "translation": Natural and accurate Korean translation.
-     * "breath_marks": The original sentence with "/" inserted at natural breath pauses/thought groups.
+     * "translation": Natural and accurate Korean translation ONLY.
+     * "chunks": Minimum 2 meaningful breath/thought-group units { "text", "meaning" }.
+     * "breath_marks": The original sentence with " / " inserted at natural breath pauses/thought groups.
      * "syntax_diagram": ASCII chunk breakdown diagram explaining sentence structure in Korean.
-     * "pronunciation_hint": Language-appropriate phonetics/rhythm/intonation tips.
+     * "pronunciation_guide" & "pronunciation_hint": Japanese furigana/reading, or French/English/other IPA, liaison, and stress/intonation tips.
      * "vocabulary": Key vocabulary words with Korean meanings.
 
-5. STRUCTURE:
+7. STRUCTURE:
    - First sentence id MUST be "s00" (title/headline if present; if no distinct header, start directly with "s01").
    - Spoken expansions belong in "tts_text" and "full_tts_script".
    - Return ONLY a valid JSON object matching the schema below. No markdown fences.
@@ -534,14 +548,19 @@ Schema:
       "raw_text": "Original text in the detected language",
       "tts_text": "Spoken form in the detected language",
       "pinyin": "Hanyu Pinyin with tone marks (Chinese mode only)",
-      "translation": "Natural translation (English if Korean source; Korean if foreign source)",
+      "translation": "Natural translation ONLY (English if Korean source; Korean if foreign source)",
       "sound_romanization": "Phonetic spoken romanization (Korean mode only)",
       "korean_chunks": [
         { "text": "단어/구", "grammarRole": "조사/어미 분해 설명" }
       ],
+      "chunks": [
+        { "text": "Meaning unit 1", "meaning": "한국어 의미" },
+        { "text": "Meaning unit 2", "meaning": "한국어 의미" }
+      ],
       "formality_badge": null,
-      "breath_marks": "Original text / with natural breath / pause markers",
+      "breath_marks": "Meaning unit 1 / Meaning unit 2",
       "syntax_diagram": "[주어] [동사구] [수식어] ASCII 구문 분석도",
+      "pronunciation_guide": "발음/성조/후리가나/IPA·연음·강세 팁",
       "pronunciation_hint": "발음/성조/연음 팁",
       "vocabulary": [
         { "word": "word", "pinyin": "병음(중국어)", "meaning": "뜻", "baseForm": "기본형", "pos": "품사", "hint": "발음힌트" }
@@ -616,75 +635,7 @@ function normalizePage(data: any): any {
   if (!data || typeof data !== 'object') {
     throw new Error('Vision response is not an object');
   }
-
-  let sentences: any[] = [];
-  if (Array.isArray(data.sentences)) sentences = data.sentences;
-  else if (Array.isArray(data.items)) sentences = data.items;
-  else if (Array.isArray(data.lines)) sentences = data.lines;
-  else if (Array.isArray(data.paragraphs)) sentences = data.paragraphs;
-  else if (Array.isArray(data.page?.sentences)) sentences = data.page.sentences;
-
-  const cleaned = sentences.map((s: any, idx: number) => {
-    const raw = String(s.raw_text || s.text || s.sentence || s.french || s.korean || s.content || '').trim();
-    const tts = String(s.tts_text || s.spoken || raw).trim();
-    const trans = String(s.translation || s.meaning || s.korean_translation || s.english_translation || '').trim();
-    const breath = String(s.breath_marks || s.chunks || s.phrasing || raw).trim();
-    const syntax = String(s.syntax_diagram || s.structure || '').trim();
-    const pron = String(s.pronunciation_hint || s.phonetics || s.sound_tips || '').trim();
-    const liaison = String(s.liaison_hint || s.liaison || '').trim();
-    const roman = s.sound_romanization ? String(s.sound_romanization).trim() : undefined;
-    const pinyin = s.pinyin ? String(s.pinyin).trim() : undefined;
-    const formality = s.formality_badge ? String(s.formality_badge).trim() : null;
-
-    let chunks: any[] = [];
-    if (Array.isArray(s.korean_chunks)) {
-      chunks = s.korean_chunks.map((chk: any) => ({
-        text: String(chk.text || '').trim(),
-        grammarRole: chk.grammarRole ? String(chk.grammarRole).trim() : '',
-      })).filter((c: any) => c.text);
-    }
-
-    let vocab: any[] = [];
-    if (Array.isArray(s.vocabulary)) {
-      vocab = s.vocabulary.map((v: any) => ({
-        word: String(v.word || '').trim(),
-        meaning: String(v.meaning || v.translation || '').trim(),
-        baseForm: v.baseForm ? String(v.baseForm).trim() : undefined,
-        pos: v.pos ? String(v.pos).trim() : undefined,
-        hint: v.hint ? String(v.hint).trim() : undefined,
-        pinyin: v.pinyin ? String(v.pinyin).trim() : undefined,
-      })).filter((v: any) => v.word);
-    }
-
-    return {
-      id: s.id || `s${String(idx + 1).padStart(2, '0')}`,
-      raw_text: raw,
-      tts_text: tts,
-      translation: trans,
-      sound_romanization: roman,
-      pinyin,
-      korean_chunks: chunks.length > 0 ? chunks : undefined,
-      formality_badge: formality,
-      breath_marks: breath,
-      syntax_diagram: syntax,
-      pronunciation_hint: pron,
-      liaison_hint: liaison,
-      vocabulary: vocab,
-    };
-  }).filter((s: any) => s.raw_text.length > 0);
-
-  let lang = data.language || { code: 'en-US', name_ko: '영어', name_en: 'English', flag: '🇺🇸' };
-  if (lang && (lang.code === 'zh' || lang.code?.startsWith('zh-') || lang.name_ko?.includes('중국어') || lang.name_en?.toLowerCase().includes('chinese'))) {
-    lang = { code: 'zh-CN', name_ko: '중국어', name_en: 'Chinese', flag: '🇨🇳' };
-  }
-
-  return {
-    language: lang,
-    title: data.title || '학습 교재',
-    full_tts_script: data.full_tts_script || cleaned.map((s: any) => s.tts_text || s.raw_text).join(' '),
-    disclaimer_ko: data.disclaimer_ko || '음성은 합성 TTS이며 원어민이 아닙니다. 발음 표기는 학습용 보조 힌트입니다.',
-    sentences: cleaned,
-  };
+  return normalizeLessonPage(data);
 }
 
 function extractJson(text: string): any {
@@ -823,9 +774,8 @@ async function generateGeminiSpeech(
     cleanText = cleanText.slice(0, 1000);
   }
 
-  // Security: Speed and voice validation
-  const validSpeeds = ['1.0', '0.75', '0.5'];
-  const normalizedSpeed = validSpeeds.includes(speed) ? speed : '1.0';
+  // Client adjusts 0.75x/0.5x via playbackRate; always generate/cache 1.0x audio to avoid split cache & duplicate quota charges
+  const normalizedSpeed = '1.0';
   const safeVoice = voiceName === 'Kore' ? 'Kore' : 'Kore';
 
   // Check persistent disk cache
@@ -861,23 +811,9 @@ async function generateGeminiSpeech(
     try {
       const langLabel = langName ? `native ${langName}` : 'native';
       const isChinese = /chinese|zh|중국어/i.test(langLabel) || /[\u4e00-\u9fa5]/.test(cleanText);
-      let promptStyle = '';
-
-      if (isChinese) {
-        if (normalizedSpeed === '0.5') {
-          promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, articulating standard Mandarin Chinese (Putonghua) with crystal-clear four tones (1st, 2nd, 3rd, 4th tones and neutral tone) and distinct pauses between thought groups.`;
-        } else if (normalizedSpeed === '0.75') {
-          promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in standard Mandarin Chinese with accurate tonal contours and natural rhythm.`;
-        } else {
-          promptStyle = `Natural, articulate, and expressive standard Mandarin Chinese speaker with authentic Beijing/Standard pronunciation, proper tones, and natural sentence cadence.`;
-        }
-      } else if (normalizedSpeed === '0.5') {
-        promptStyle = `Speak very slowly and deliberately at a 0.5x beginner pace, carefully pronouncing every single phoneme in authentic ${langLabel}, with clear pauses between thought groups.`;
-      } else if (normalizedSpeed === '0.75') {
-        promptStyle = `Speak slowly and clearly at a 0.75x relaxed learner pace in authentic ${langLabel}.`;
-      } else {
-        promptStyle = `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation and proper cadence.`;
-      }
+      const promptStyle = isChinese
+        ? `Natural, articulate, and expressive standard Mandarin Chinese speaker with authentic Beijing/Standard pronunciation, proper tones, and natural sentence cadence.`
+        : `Natural, articulate, and expressive ${langLabel} speaker with authentic pronunciation and proper cadence.`;
 
       const ttsModel = 'gemini-3.8-flash-lite-tts';
       let response: any;
@@ -986,7 +922,7 @@ app.get('/api/demo', async (req: Request, res: Response) => {
 
     res.json({
       key,
-      page: data,
+      page: normalizeLessonPage(data),
       photoUrl: null,
     });
   } catch (err: any) {
@@ -1244,7 +1180,7 @@ app.get('/api/lesson/:key', async (req: Request, res: Response) => {
     if (fs.existsSync(chinesePath)) {
       try {
         const raw = await fs.promises.readFile(chinesePath, 'utf-8');
-        const page = JSON.parse(raw);
+        const page = normalizeLessonPage(JSON.parse(raw));
         return res.json({ key: 'demo-chinese', page, photoUrl: null });
       } catch {}
     }
@@ -1269,7 +1205,7 @@ app.get('/api/lesson/:key', async (req: Request, res: Response) => {
 
   try {
     const raw = await fs.promises.readFile(pagePath, 'utf-8');
-    const page = JSON.parse(raw);
+    const page = normalizeLessonPage(JSON.parse(raw));
     const photoExists = fs.existsSync(path.join(lessonFolder, 'page.jpg'));
     const photoUrl = photoExists ? `/api/photo/${safeKey}` : null;
 
@@ -1491,7 +1427,7 @@ app.post(
       if (fs.existsSync(pageJsonFile)) {
         try {
           const cachedRaw = await fs.promises.readFile(pageJsonFile, 'utf-8');
-          const cachedData = JSON.parse(cachedRaw);
+          const cachedData = normalizeLessonPage(JSON.parse(cachedRaw));
 
           // 다른 사람이 먼저 올린 같은 사진이어도 내 서재에 내 항목을 남긴다(모델 호출·한도 차감 없음).
           await updateLibraryAsync(async (currentLib) => ({

@@ -96,7 +96,13 @@ export const LandingDemoVideo: React.FC = () => {
       className="relative mx-auto my-6 w-full max-w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm sm:max-w-[360px]"
       style={{ aspectRatio: '4 / 5' }}
     >
-      {showVideo ? (
+      <img
+        src={POSTER_SRC}
+        alt={showVideo ? '' : ARIA_LABEL}
+        aria-hidden={showVideo || undefined}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      {showVideo && (
         <video
           ref={videoRef}
           className="absolute inset-0 h-full w-full object-cover"
@@ -116,12 +122,6 @@ export const LandingDemoVideo: React.FC = () => {
             if (reducedMotion) setPlayingOnce(false);
           }}
           onError={() => setHasError(true)}
-        />
-      ) : (
-        <img
-          src={POSTER_SRC}
-          alt={ARIA_LABEL}
-          className="absolute inset-0 h-full w-full object-cover"
         />
       )}
 

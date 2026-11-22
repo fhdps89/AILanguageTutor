@@ -15,8 +15,12 @@
       "tts_text": "北京故宫",
       "pinyin": "Běijīng Gùgōng",
       "translation": "베이징 고궁 (자금성 - 제목)",
-      "breath_marks": "北京故宫",
-      "syntax_diagram": "[제목] 北京故宫 (고유명사)",
+      "breath_marks": "北京 / 故宫",
+      "chunks": [
+        { "text": "北京", "meaning": "베이징" },
+        { "text": "故宫", "meaning": "고궁(자금성)" }
+      ],
+      "syntax_diagram": "[제목] 北京 / 故宫 (고유명사)",
       "pronunciation_hint": "Běijīng (3성+1성): Běi는 반3성 또는 완전한 3성으로 내렸다가 jīng을 높고 평평하게 발음.",
       "vocabulary": [
         {
